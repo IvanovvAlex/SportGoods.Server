@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: sportgoods-api
+    env: docker
+    plan: free
+    dockerfilePath: ./SportGoods.Server.API/Dockerfile
+    autoDeploy: true
+
+databases:
+  - name: sportgoods-db
+    databaseName: sportgoodsdb
+    plan: free

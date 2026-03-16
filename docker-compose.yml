@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    container_name: sportgoods-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${DB_NAME}"
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    networks:
+      - sportgoods-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  sportgoods-api:
+    build:
+      context: .
+      dockerfile: SportGoods.Server.API/Dockerfile
+    ports:
+      - "${PORT}:${PORT}"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT}"
+      ASPNETCORE_URLS: "http://*:${PORT}"
+      DB_CONNECTION: "Host=db;Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
+    depends_on:
+      - db
+    networks:
+      - sportgoods-network
+
+networks:
+  sportgoods-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SportGoods.Server.Core\SportGoods.Server.Core.csproj" />
+    <ProjectReference Include="..\SportGoods.Server.Data\SportGoods.Server.Data.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>SportGoods.Server.Common</AssemblyName>
+    <RootNamespace>SportGoods.Server.Common</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
