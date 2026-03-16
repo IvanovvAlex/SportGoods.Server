@@ -2,6 +2,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /app
 
 COPY *.sln .
+COPY Directory.Packages.props .
+COPY global.json .
 COPY SportGoods.Server.API/*.csproj ./SportGoods.Server.API/
 COPY SportGoods.Server.Data/*.csproj ./SportGoods.Server.Data/
 COPY SportGoods.Server.Domain/*.csproj ./SportGoods.Server.Domain/
@@ -10,10 +12,10 @@ COPY SportGoods.Server.Common/*.csproj ./SportGoods.Server.Common/
 COPY SportGoods.Server.Tests.Unit/*.csproj ./SportGoods.Server.Tests.Unit/
 
 
-RUN dotnet restore
+RUN dotnet restore SportGoods.Server.sln
 
 COPY . .
-RUN dotnet publish SportGoods.Server.API/SportGoods.Server.API.csproj -c Release -o out
+RUN dotnet publish SportGoods.Server.API/SportGoods.Server.API.csproj -c Release -o out --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
