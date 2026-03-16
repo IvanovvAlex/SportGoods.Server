@@ -1,12 +1,111 @@
+previews:
+  generation: off
+
 services:
   - type: web
+    runtime: docker
     name: sportgoods-api
-    env: docker
+    repo: https://github.com/IvanovvAlex/SportGoods.Server.git
+    branch: main
     plan: free
+    region: frankfurt
+    dockerContext: .
     dockerfilePath: ./SportGoods.Server.API/Dockerfile
-    autoDeploy: true
+    dockerCommand: dotnet SportGoods.Server.API.dll
+    healthCheckPath: /openapi/v1.json
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:10000
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+        value: "true"
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: sportgoods-db
+          property: connectionString
+      - key: Jwt__Issuer
+        value: SportGoods.Server.API
+      - key: Jwt__Audience
+        value: SportGoods.Server.API.Client
+      - key: Jwt__Secret
+        generateValue: true
+      - key: Jwt__AccessTokenExpiryMinutes
+        value: "120"
+      - key: Jwt__RefreshTokenExpiryDays
+        value: "30"
+      - key: ClientApp__BaseUrl
+        value: https://sportgoods-client.onrender.com
+      - key: Cors__AllowedOrigins__0
+        value: https://sportgoods-client.onrender.com
+      - key: Cors__AllowedOrigins__1
+        value: http://localhost:5173
+      - key: Cors__AllowedOrigins__2
+        value: https://localhost:5173
+      - key: Cors__AllowedOrigins__3
+        value: http://127.0.0.1:5173
+      - key: Email__DeliveryMode
+        value: Console
+      - key: Email__SenderEmail
+        value: noreply@sportgoods.local
+      - key: Email__SenderName
+        value: SportGoods
+      - key: Email__PasswordResetTokenExpiryMinutes
+        value: "30"
+      - key: Payments__OnlineProviderName
+        value: DemoSportPay
+      - key: Payments__OnlinePaymentLabel
+        value: Online card payment
+      - key: Payments__SupportedMethods__0
+        value: online-card
+      - key: Payments__SupportedMethods__1
+        value: bank-transfer
+      - key: Payments__BankTransfer__Beneficiary
+        value: SportGoods Ltd.
+      - key: Payments__BankTransfer__Iban
+        value: BG00DEMO12345678901234
+      - key: Payments__BankTransfer__Bic
+        value: DEMOBGSF
+      - key: Payments__BankTransfer__BankName
+        value: Demo Bank
+      - key: Payments__BankTransfer__ReferencePrefix
+        value: SPORT
+      - key: Inventory__LowStockThreshold
+        value: "10"
+      - key: DevelopmentSettings__ResetDatabaseOnStart
+        value: "false"
+      - key: DevelopmentSettings__ExposeEmailPreviewLinks
+        value: "false"
+
+  - type: web
+    runtime: static
+    name: sportgoods-client
+    repo: https://github.com/IvanovvAlex/SportGoods.Client.git
+    branch: main
+    plan: free
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+      - key: VITE_API_URL
+        value: https://sportgoods-api.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 
 databases:
   - name: sportgoods-db
     databaseName: sportgoodsdb
+    user: sportgoods
     plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
+    ipAllowList: []
