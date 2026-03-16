@@ -1,28 +1,70 @@
 using SportGoods.Server.Data.Entities;
 
-namespace SportGoods.Server.Data.Seed
-{
-    public static class CategorySeeder
-    {
-        public static async Task SeedAsync(ApplicationDbContext db)
-        {
-            if (db.Categories.Any())
-            {
-                return;
-            }
-            
-            Category[] categories =
-            [
-                new() { Id = Guid.NewGuid(), Name = "Фитнес", ImageUri = "https://api.interactive-img.com/interactiveimage/67171ba1c4f8e.jpg"},
-                new() { Id = Guid.NewGuid(), Name = "Тенис", ImageUri = "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=800" },
-                new() { Id = Guid.NewGuid(), Name = "Футбол", ImageUri = "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=800" },
-                new() { Id = Guid.NewGuid(), Name = "Баскетбол", ImageUri = "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800" },
-                new() { Id = Guid.NewGuid(), Name = "Колоездене", ImageUri = "https://image-cdn.essentiallysports.com/wp-content/uploads/2021-07-15T142945Z_720664159_UP1EH7F149JI4_RTRMADP_3_CYCLING-FRANCE-800x546.jpg" },
-                new() { Id = Guid.NewGuid(), Name = "Бокс", ImageUri = "https://pride.shop/images/thumbs/0013562_rukavice.jpeg" },
-            ];
+namespace SportGoods.Server.Data.Seed;
 
-            db.Categories.AddRange(categories);
-            await db.SaveChangesAsync();
+public static class CategorySeeder
+{
+    public static async Task SeedAsync(ApplicationDbContext db)
+    {
+        Category[] categories =
+        [
+            new()
+            {
+                Name = "Running",
+                ImageUri = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Football",
+                ImageUri = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Fitness & Training",
+                ImageUri = "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Outdoor",
+                ImageUri = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Cycling",
+                ImageUri = "https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Tennis",
+                ImageUri = "https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Basketball",
+                ImageUri = "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80",
+            },
+            new()
+            {
+                Name = "Accessories",
+                ImageUri = "https://images.unsplash.com/photo-1517837016564-bfc5f76c00a3?auto=format&fit=crop&w=1200&q=80",
+            },
+        ];
+
+        HashSet<string> existingCategoryNames = db.Categories
+            .Where(category => !string.IsNullOrWhiteSpace(category.Name))
+            .Select(category => category.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Category[] categoriesToAdd = categories
+            .Where(category => !existingCategoryNames.Contains(category.Name))
+            .ToArray();
+
+        if (categoriesToAdd.Length == 0)
+        {
+            return;
         }
+
+        db.Categories.AddRange(categoriesToAdd);
+        await db.SaveChangesAsync();
     }
 }

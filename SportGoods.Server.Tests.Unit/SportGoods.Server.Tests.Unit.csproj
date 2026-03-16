@@ -17,6 +17,7 @@
     </ItemGroup>
     
     <ItemGroup>
+      <ProjectReference Include="..\SportGoods.Server.API\SportGoods.Server.API.csproj" />
       <ProjectReference Include="..\SportGoods.Server.Data\SportGoods.Server.Data.csproj" />
       <ProjectReference Include="..\SportGoods.Server.Domain\SportGoods.Server.Domain.csproj" />
     </ItemGroup>

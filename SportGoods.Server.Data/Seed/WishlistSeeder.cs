@@ -1,33 +1,39 @@
 using SportGoods.Server.Data.Entities;
 
-namespace SportGoods.Server.Data.Seed
+namespace SportGoods.Server.Data.Seed;
+
+public static class WishlistSeeder
 {
-    public static class WishlistSeeder
+    public static async Task SeedAsync(ApplicationDbContext db)
     {
-        public static async Task SeedAsync(ApplicationDbContext db)
+        if (db.WishlistItems.Any())
         {
-            if (db.WishlistItems.Any())
-            {
-                return;
-            }
-
-            List<User> users = db.Users.Take(5).ToList();
-            List<Product> products = db.Products.Skip(5).Take(5).ToList();
-
-            foreach (User user in users)
-            {
-                foreach (Product product in products)
-                {
-                    db.WishlistItems.Add(new()
-                    {
-                        Id = Guid.NewGuid(),
-                        UserId = user.Id,
-                        ProductId = product.Id
-                    });
-                }
-            }
-
-            await db.SaveChangesAsync();
+            return;
         }
+
+        Dictionary<string, User> usersByEmail = db.Users.ToDictionary(user => user.Email, user => user);
+        Dictionary<string, Product> productsByTitle = db.Products.ToDictionary(product => product.Title, product => product);
+
+        WishlistItem[] wishlistItems =
+        [
+            CreateWishlistItem(usersByEmail["martin.georgiev@sportgoods.bg"], productsByTitle["Garmin Forerunner 255 GPS Running Watch"]),
+            CreateWishlistItem(usersByEmail["maria.dimitrova@sportgoods.bg"], productsByTitle["Wilson Pro Staff RF97 v13 Tennis Racket"]),
+            CreateWishlistItem(usersByEmail["ivan.petrov@sportgoods.bg"], productsByTitle["Bowflex SelectTech 552 Adjustable Dumbbells"]),
+            CreateWishlistItem(usersByEmail["petya.stoyanova@sportgoods.bg"], productsByTitle["Coleman Darwin 3 Tent"]),
+            CreateWishlistItem(usersByEmail["georgi.kolev@sportgoods.bg"], productsByTitle["Adidas Predator Accuracy.1 FG Football Boots"]),
+            CreateWishlistItem(usersByEmail["stela.atanasova@sportgoods.bg"], productsByTitle["YETI Rambler 26 oz Water Bottle"]),
+        ];
+
+        await db.WishlistItems.AddRangeAsync(wishlistItems);
+        await db.SaveChangesAsync();
+    }
+
+    private static WishlistItem CreateWishlistItem(User user, Product product)
+    {
+        return new WishlistItem
+        {
+            UserId = user.Id,
+            ProductId = product.Id,
+        };
     }
 }

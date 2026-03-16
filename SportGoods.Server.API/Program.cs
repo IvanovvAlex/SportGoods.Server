@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using SportGoods.Server.API.Configuration;
 using SportGoods.Server.API.Middlewares;
 using SportGoods.Server.API.ServiceExtensions;
 using SportGoods.Server.Common.Options;
@@ -34,11 +35,20 @@ builder.Services.AddCustomServices();
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 
-string connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+ResolvedDatabaseConnection resolvedDatabaseConnection;
+
+try
+{
+    resolvedDatabaseConnection = DatabaseConnectionStringResolver.Resolve(builder.Configuration, builder.Environment);
+}
+catch (InvalidOperationException ex)
+{
+    Console.Error.WriteLine($"Database configuration error: {ex.Message}");
+    throw;
+}
 
 builder.Services.AddDbContext<ApplicationDbContext>(
-    options => options.UseNpgsql(connectionString));
+    options => options.UseNpgsql(resolvedDatabaseConnection.ConnectionString));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -75,6 +85,10 @@ builder.Services.AddCors(options =>
 
 WebApplication app = builder.Build();
 
+app.Logger.LogInformation(
+    "PostgreSQL connection resolved from configuration key {DatabaseConnectionSource}.",
+    resolvedDatabaseConnection.SourceKey);
+
 app.UseMiddleware<ExceptionHandlerMiddleware>();
 app.UseCors("ConfiguredOrigins");
 
@@ -93,16 +107,28 @@ app.MapControllers();
 
 using (IServiceScope scope = app.Services.CreateScope())
 {
-    ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    IOptions<DevelopmentOptions> developmentOptionsAccessor = scope.ServiceProvider.GetRequiredService<IOptions<DevelopmentOptions>>();
-    DevelopmentOptions developmentOptions = developmentOptionsAccessor.Value;
-
-    if (app.Environment.IsDevelopment() && developmentOptions.ResetDatabaseOnStart)
+    try
     {
-        await DatabaseUtils.TruncateAllTablesSafeAsync(db);
-    }
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        IOptions<DevelopmentOptions> developmentOptionsAccessor = scope.ServiceProvider.GetRequiredService<IOptions<DevelopmentOptions>>();
+        DevelopmentOptions developmentOptions = developmentOptionsAccessor.Value;
 
-    await db.Database.MigrateAsync();
+        if (app.Environment.IsDevelopment() && developmentOptions.ResetDatabaseOnStart)
+        {
+            await DatabaseUtils.TruncateAllTablesSafeAsync(db);
+        }
+
+        app.Logger.LogInformation("Applying Entity Framework Core migrations.");
+        await db.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogCritical(
+            ex,
+            "Database startup failed while applying migrations using configuration key {DatabaseConnectionSource}.",
+            resolvedDatabaseConnection.SourceKey);
+        throw;
+    }
 }
 
 await DbInitializer.SeedAsync(app.Services);
