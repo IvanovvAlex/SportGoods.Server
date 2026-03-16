@@ -5,13 +5,16 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Moq;
+using SportGoods.Server.Common.Options;
 using SportGoods.Server.Common.Requests.Auth;
 using SportGoods.Server.Common.Responses.Auth;
 using SportGoods.Server.Core.Exceptions;
 using SportGoods.Server.Data;
 using SportGoods.Server.Data.Entities;
 using SportGoods.Server.Data.Interfaces;
+using SportGoods.Server.Domain.Interfaces;
 using SportGoods.Server.Domain.Services;
 using Xunit;
 
@@ -23,6 +26,8 @@ public class AuthServiceTests
     private readonly ApplicationDbContext _context;
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IHttpContextAccessor> _httpContextAccessorMock;
+    private readonly Mock<IPasswordResetTokenStore> _passwordResetTokenStoreMock;
+    private readonly Mock<IEmailNotificationService> _emailNotificationServiceMock;
 
     public AuthServiceTests()
     {
@@ -32,7 +37,27 @@ public class AuthServiceTests
         _context = new(options);
         _userRepositoryMock = new();
         _httpContextAccessorMock = new();
-        _authService = new(_context, _userRepositoryMock.Object, _httpContextAccessorMock.Object);
+        _passwordResetTokenStoreMock = new();
+        _emailNotificationServiceMock = new();
+        _authService = new(
+            _context,
+            _userRepositoryMock.Object,
+            _httpContextAccessorMock.Object,
+            Options.Create(new JwtOptions
+            {
+                Issuer = "SportGoods.Tests",
+                Audience = "SportGoods.Tests.Client",
+                Secret = "TestJwtSecretValueThatIsLongEnoughForJwtSigning123456",
+                AccessTokenExpiryMinutes = 60,
+                RefreshTokenExpiryDays = 30
+            }),
+            Options.Create(new ClientAppOptions
+            {
+                BaseUrl = "http://localhost:5173"
+            }),
+            Options.Create(new EmailOptions()),
+            _passwordResetTokenStoreMock.Object,
+            _emailNotificationServiceMock.Object);
     }
 
     [Fact]

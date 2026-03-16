@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using SportGoods.Server.Common.Options;
 using SportGoods.Server.Common.Requests.Order;
 using SportGoods.Server.Common.Requests.OrderItem;
 using SportGoods.Server.Common.Responses.Order;
@@ -17,8 +19,13 @@ public class OrderService(
     IOrderRepository orderRepository,
     IProductRepository productRepository,
     IAuthService authService,
-    IOrderItemRepository orderItemRepository) : IOrderService
+    IOrderItemRepository orderItemRepository,
+    IUserRepository userRepository,
+    IEmailNotificationService emailNotificationService,
+    IOptions<PaymentOptions> paymentOptions) : IOrderService
 {
+    private readonly PaymentOptions _paymentOptions = paymentOptions.Value;
+
     public async Task<bool> ChangeStatusAsync(ChangeOrderStatusRequest request)
     {
         Order? order = await orderRepository.GetByIdAsync(request.OrderId);
@@ -30,10 +37,18 @@ public class OrderService(
 
         if (request.OrderStatus != OrderStatus.Cancelled && order.Status == OrderStatus.Created)
         {
+            await EnsureStockAvailabilityAsync(order);
             await DecreaseProductQuantitiesAsync(order);
         }
 
         await orderRepository.ChangeStatusAsync(request.OrderId, request.OrderStatus);
+
+        User? user = await userRepository.GetByIdAsync(order.UserId);
+        if (user != null)
+        {
+            await emailNotificationService.SendOrderStatusChangedAsync(user, order);
+        }
+
         return true;
     }
 
@@ -41,7 +56,7 @@ public class OrderService(
     {
         if (request.UserId == null)
         {
-            string role = await authService.GetCurrentUserRole();
+            string? role = await authService.GetCurrentUserRole();
             if (role != Roles.Admin)
             {
                 throw new AppException("Forbidden").SetStatusCode(403);
@@ -50,6 +65,10 @@ public class OrderService(
 
         Filter<Order> filter = new()
         {
+            Includes =
+            [
+                x => x.Items
+            ],
             Predicate = request.GetPredicate(),
             PageNumber = request.PageNumber ?? 1,
             PageSize = request.PageSize ?? 10,
@@ -63,29 +82,19 @@ public class OrderService(
 
         foreach (Order order in result.Items!)
         {
-            OrderResponse response = new()
-            {
-                Id = order.Id,
-                OrderTotalPrice = order.OrderTotalPrice,
-                Status = order.Status,
-                CreatedOn = order.CreatedOn,
-            };
-
-            responses.Add(response);
+            responses.Add(MapOrderToResponse(order));
         }
 
-        Paginated<OrderResponse> paginated = new()
+        return new Paginated<OrderResponse>
         {
             Items = responses,
             TotalCount = result.TotalCount
         };
-
-        return paginated;
     }
 
     public async Task<OrderResponse> GetAsync()
     {
-        Guid userId = Guid.Parse(await authService.GetCurrentUserId());
+        Guid userId = Guid.Parse((await authService.GetCurrentUserId())!);
         Order? order = await orderRepository.GetByUserIdAsync(userId);
 
         if (order == null)
@@ -98,7 +107,7 @@ public class OrderService(
 
     public async Task<OrderResponse> AddProductAsync(AddOrderItemRequest request)
     {
-        Guid userId = Guid.Parse(await authService.GetCurrentUserId());
+        Guid userId = Guid.Parse((await authService.GetCurrentUserId())!);
         Order? order = await orderRepository.GetByUserIdAsync(userId);
 
         if (order == null)
@@ -113,6 +122,12 @@ public class OrderService(
         }
 
         OrderItem? existingItem = order.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
+        int nextQuantity = (existingItem?.Quantity ?? 0) + request.Quantity;
+        if (product.Quantity < nextQuantity)
+        {
+            throw new AppException("Insufficient stock for the selected quantity.").SetStatusCode(409);
+        }
+
         if (existingItem != null)
         {
             existingItem.Quantity += request.Quantity;
@@ -120,15 +135,9 @@ public class OrderService(
         }
         else
         {
-            decimal singlePrice;
-            if (product.DiscountedPrice != 0m)
-            {
-                singlePrice = product.DiscountedPrice;
-            }
-            else
-            {
-                singlePrice = product.RegularPrice;
-            }
+            decimal singlePrice = product.DiscountedPrice != 0m
+                ? product.DiscountedPrice
+                : product.RegularPrice;
 
             OrderItem newOrderItem = new()
             {
@@ -140,7 +149,9 @@ public class OrderService(
                 PrimaryImageUri = product.MainImageUrl,
                 Title = product.Title,
             };
+
             await orderItemRepository.AddAsync(newOrderItem);
+            order.Items.Add(newOrderItem);
         }
 
         UpdateOrderPrices(order);
@@ -152,7 +163,7 @@ public class OrderService(
 
     public async Task<OrderResponse> RemoveProductAsync(RemoveOrderItemRequest request)
     {
-        Guid userId = Guid.Parse(await authService.GetCurrentUserId());
+        Guid userId = Guid.Parse((await authService.GetCurrentUserId())!);
         Order? order = await orderRepository.GetByUserIdAsync(userId);
 
         if (order == null)
@@ -174,7 +185,6 @@ public class OrderService(
             if (order.Items.Count == 0)
             {
                 await orderRepository.DeleteAsync(order.Id);
-
                 throw new AppException("Order deleted").SetStatusCode(200);
             }
         }
@@ -192,14 +202,26 @@ public class OrderService(
 
     public async Task<bool> SendCurrentAsync(SendOrderRequest request)
     {
-        Guid userId = Guid.Parse(await authService.GetCurrentUserId());
+        Guid userId = Guid.Parse((await authService.GetCurrentUserId())!);
         Order? order = await orderRepository.GetByUserIdAsync(userId);
 
         if (order == null || !order.Items.Any())
         {
             throw new AppException("Order not found").SetStatusCode(404);
         }
-        
+
+        if (!request.ConsentAccepted)
+        {
+            throw new AppException("Consent is required to place an order.").SetStatusCode(400);
+        }
+
+        string paymentMethod = ResolvePaymentMethod(request.PaymentMethod);
+        string deliveryMethod = string.IsNullOrWhiteSpace(request.DeliveryMethod)
+            ? "standard-courier"
+            : request.DeliveryMethod.Trim();
+
+        await EnsureStockAvailabilityAsync(order);
+
         order.Names = request.Names;
         order.PostalCode = request.PostalCode;
         order.Country = request.Country;
@@ -210,6 +232,13 @@ public class OrderService(
 
         await orderRepository.UpdateAsync(order);
         await DecreaseProductQuantitiesAsync(order);
+
+        User? user = await userRepository.GetByIdAsync(userId);
+        if (user != null)
+        {
+            await emailNotificationService.SendOrderConfirmationAsync(user, order, paymentMethod, deliveryMethod);
+        }
+
         return true;
     }
 
@@ -220,10 +249,19 @@ public class OrderService(
 
     private OrderResponse MapOrderToResponse(Order order)
     {
-        return new()
+        return new OrderResponse
         {
             Id = order.Id,
+            UserId = order.UserId,
             OrderTotalPrice = order.OrderTotalPrice,
+            Names = order.Names,
+            PostalCode = order.PostalCode,
+            Country = order.Country,
+            City = order.City,
+            Address = order.Address,
+            Phone = order.Phone,
+            Status = order.Status,
+            CreatedOn = order.CreatedOn,
             Items = order.Items.Select(i => new OrderItemResponse
                 {
                     ProductId = i.ProductId,
@@ -238,15 +276,50 @@ public class OrderService(
         };
     }
 
+    private async Task EnsureStockAvailabilityAsync(Order order)
+    {
+        foreach (OrderItem item in order.Items)
+        {
+            Product? product = await productRepository.GetByIdAsync(item.ProductId);
+            if (product == null || product.Quantity < item.Quantity)
+            {
+                throw new AppException($"Product '{item.Title}' is out of stock or has insufficient quantity.").SetStatusCode(409);
+            }
+        }
+    }
+
     private async Task DecreaseProductQuantitiesAsync(Order order)
     {
         foreach (OrderItem item in order.Items)
         {
             Product? product = await productRepository.GetByIdAsync(item.ProductId);
+            if (product == null)
+            {
+                throw new AppException("Product not found").SetStatusCode(404);
+            }
 
-            product!.Quantity -= (uint)item.Quantity;
+            if (product.Quantity < item.Quantity)
+            {
+                throw new AppException($"Product '{item.Title}' is out of stock or has insufficient quantity.").SetStatusCode(409);
+            }
+
+            product.Quantity -= (uint)item.Quantity;
 
             await productRepository.UpdateAsync(product);
         }
+    }
+
+    private string ResolvePaymentMethod(string? paymentMethod)
+    {
+        string candidate = string.IsNullOrWhiteSpace(paymentMethod)
+            ? _paymentOptions.SupportedMethods.FirstOrDefault() ?? "online-card"
+            : paymentMethod.Trim();
+
+        if (!_paymentOptions.SupportedMethods.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new AppException("Unsupported payment method.").SetStatusCode(400);
+        }
+
+        return candidate;
     }
 }

@@ -2,6 +2,7 @@ using SportGoods.Server.Data.Interfaces;
 using SportGoods.Server.Data.Repositories;
 using SportGoods.Server.Domain.Interfaces;
 using SportGoods.Server.Domain.Services;
+using SportGoods.Server.API.Services;
 
 namespace SportGoods.Server.API.ServiceExtensions
 {
@@ -17,6 +18,9 @@ namespace SportGoods.Server.API.ServiceExtensions
             services.AddTransient<IWishlistService, WishlistService>();
             services.AddTransient<IReviewService, ReviewService>();
             services.AddTransient<IOrderService, OrderService>();
+            services.AddTransient<IGdprService, GdprService>();
+            services.AddSingleton<IPasswordResetTokenStore, MemoryPasswordResetTokenStore>();
+            services.AddSingleton<IEmailNotificationService, ConsoleEmailNotificationService>();
 
             // REPOS
             services.AddScoped<IUserRepository, UserRepository>();

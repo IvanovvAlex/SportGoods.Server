@@ -4,6 +4,7 @@ using SportGoods.Server.Common.Responses.Users;
 using SportGoods.Server.Core.Exceptions;
 using SportGoods.Server.Data.Entities;
 using SportGoods.Server.Data.Interfaces;
+using SportGoods.Server.Domain.Interfaces;
 using SportGoods.Server.Domain.Services;
 using System;
 using System.Collections.Generic;
@@ -16,12 +17,14 @@ namespace SportGoods.Server.Tests.Unit.Services
     public class UserServiceTests
     {
         private readonly Mock<IUserRepository> userRepositoryMock;
+        private readonly Mock<IAuthService> authServiceMock;
         private readonly UserService userService;
 
         public UserServiceTests()
         {
             userRepositoryMock = new();
-            userService = new(userRepositoryMock.Object);
+            authServiceMock = new();
+            userService = new(userRepositoryMock.Object, authServiceMock.Object);
         }
 
         [Fact]

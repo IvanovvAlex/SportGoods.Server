@@ -5,7 +5,9 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using SportGoods.Server.Common.Options;
 using SportGoods.Server.Common.Requests.Auth;
 using SportGoods.Server.Common.Responses.Auth;
 using SportGoods.Server.Core.Exceptions;
@@ -17,8 +19,20 @@ using SportGoods.Server.Domain.Interfaces;
 
 namespace SportGoods.Server.Domain.Services;
 
-public class AuthService(ApplicationDbContext context, IUserRepository userRepository, IHttpContextAccessor httpContextAccessor) : IAuthService
+public class AuthService(
+    ApplicationDbContext context,
+    IUserRepository userRepository,
+    IHttpContextAccessor httpContextAccessor,
+    IOptions<JwtOptions> jwtOptions,
+    IOptions<ClientAppOptions> clientAppOptions,
+    IOptions<EmailOptions> emailOptions,
+    IPasswordResetTokenStore passwordResetTokenStore,
+    IEmailNotificationService emailNotificationService) : IAuthService
 {
+    private readonly JwtOptions _jwtOptions = jwtOptions.Value;
+    private readonly ClientAppOptions _clientAppOptions = clientAppOptions.Value;
+    private readonly EmailOptions _emailOptions = emailOptions.Value;
+
     public async Task<RegisterUserResponse?> RegisterAsync(RegisterUserRequest request)
     {
         if (await userRepository.IsEmailAlreadyUsed(request.Email))
@@ -34,17 +48,16 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
             Phone = request.Phone,
             Role = Roles.RegisteredCustomer
         };
-        
+
         string hashedPassword = new PasswordHasher<User>()
             .HashPassword(user, request.Password);
 
-        user.Email = request.Email;
         user.PasswordHash = hashedPassword;
 
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
-        return new()
+        return new RegisterUserResponse
         {
             Id = user.Id,
         };
@@ -52,11 +65,12 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
 
     public async Task<TokenResponse?> LoginAsync(LoginUserRequest request)
     {
-        User? user = await context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        User? user = await context.Users.FirstOrDefaultAsync(u => u.Email == request.Email && !u.IsDeleted);
         if (user is null)
         {
             return null;
         }
+
         if (new PasswordHasher<User>().VerifyHashedPassword(user, user.PasswordHash, request.Password)
             == PasswordVerificationResult.Failed)
         {
@@ -75,13 +89,64 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
         }
 
         return await CreateTokenResponse(user);
-        
+    }
+
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        User? user = await context.Users.FirstOrDefaultAsync(u => u.Email == request.Email && !u.IsDeleted);
+
+        ForgotPasswordResponse response = new()
+        {
+            Message = "If an account with this email exists, a password reset link has been prepared."
+        };
+
+        if (user is null)
+        {
+            return response;
+        }
+
+        TimeSpan expiresIn = TimeSpan.FromMinutes(_emailOptions.PasswordResetTokenExpiryMinutes);
+        string token = passwordResetTokenStore.CreateToken(user.Id, expiresIn);
+        string resetLink = $"{_clientAppOptions.BaseUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
+
+        await emailNotificationService.SendPasswordResetAsync(user, resetLink);
+
+        if (_emailOptions.DeliveryMode.Equals("Console", StringComparison.OrdinalIgnoreCase))
+        {
+            response.PreviewResetLink = resetLink;
+        }
+
+        return response;
+    }
+
+    public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        Guid? userId = passwordResetTokenStore.ConsumeToken(request.Token);
+        if (userId == null)
+        {
+            throw new AppException("The password reset link is invalid or expired.").SetStatusCode(400);
+        }
+
+        User? user = await context.Users.FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted);
+        if (user is null)
+        {
+            throw new AppException("User not found.").SetStatusCode(404);
+        }
+
+        string hashedPassword = new PasswordHasher<User>().HashPassword(user, request.NewPassword);
+        user.PasswordHash = hashedPassword;
+        user.RefreshToken = null;
+        user.RefreshTokenExpiryTime = null;
+
+        await context.SaveChangesAsync();
+
+        return true;
     }
 
     public async Task<bool> LogoutAsync()
     {
-        Guid currentUserId = Guid.Parse(await GetCurrentUserId());
-        User? user = await context.Users.FirstOrDefaultAsync(u => u.Id == currentUserId);
+        Guid currentUserId = Guid.Parse((await GetCurrentUserId())!);
+        User? user = await context.Users.FirstOrDefaultAsync(u => u.Id == currentUserId && !u.IsDeleted);
 
         if (user == null)
         {
@@ -91,15 +156,14 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
         user.RefreshToken = null;
         user.RefreshTokenExpiryTime = null;
         await context.SaveChangesAsync();
-        
+
         return true;
     }
-    
+
     private async Task<User?> ValidateRefreshTokenAsync(Guid userId, string refreshToken)
     {
-        User? user = await context.Users.FindAsync(userId);
-        if (user is null || user.RefreshToken != refreshToken
-                         || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+        User? user = await context.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+        if (user is null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
         {
             return null;
         }
@@ -107,15 +171,20 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
         return user;
     }
 
-    private async Task<TokenResponse> CreateTokenResponse(User? user)
+    private async Task<TokenResponse> CreateTokenResponse(User user)
     {
-        return new()
+        return new TokenResponse
         {
             AccessToken = CreateToken(user),
-            RefreshToken = await GenerateAndSaveRefreshTokenAsync(user)
+            RefreshToken = await GenerateAndSaveRefreshTokenAsync(user),
+            UserId = user.Id,
+            Email = user.Email,
+            Names = user.Names,
+            Phone = user.Phone,
+            Role = user.Role
         };
     }
-    
+
     private string GenerateRefreshToken()
     {
         byte[] randomNumber = new byte[32];
@@ -128,7 +197,7 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
     {
         string refreshToken = GenerateRefreshToken();
         user.RefreshToken = refreshToken;
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(int.Parse(Environment.GetEnvironmentVariable("REFRESH_TOKEN_EXPIRY_DAYS")!));
+        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpiryDays);
         await context.SaveChangesAsync();
         return refreshToken;
     }
@@ -137,43 +206,44 @@ public class AuthService(ApplicationDbContext context, IUserRepository userRepos
     {
         List<Claim> claims =
         [
-            new(ClaimTypes.Name, user.Email),
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Role, user.Role.ToString())
+            new Claim(ClaimTypes.Name, user.Email),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Role, user.Role ?? Roles.RegisteredCustomer)
         ];
 
-        SymmetricSecurityKey key = new(
-            Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("JWT_TOKEN_SECRET")!));
+        SymmetricSecurityKey key = new(Encoding.UTF8.GetBytes(_jwtOptions.Secret));
 
         SigningCredentials creds = new(key, SecurityAlgorithms.HmacSha512);
 
         JwtSecurityToken tokenDescriptor = new(
-            issuer: Environment.GetEnvironmentVariable("JWT_ISSUER"),
-            audience: Environment.GetEnvironmentVariable("JWT_AUDIENCE"),
+            issuer: _jwtOptions.Issuer,
+            audience: _jwtOptions.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(int.Parse(Environment.GetEnvironmentVariable("JWT_TOKEN_EXPIRY_MINUTES")!)),
+            expires: DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpiryMinutes),
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
     }
-    
-    public async Task<string?> GetCurrentUserId()
+
+    public Task<string?> GetCurrentUserId()
     {
-        return await GetClaimValue(ClaimTypes.NameIdentifier);
+        return GetClaimValue(ClaimTypes.NameIdentifier);
     }
 
-    public async Task<string?> GetCurrentUserEmail()
+    public Task<string?> GetCurrentUserEmail()
     {
-        return await GetClaimValue(ClaimTypes.Name);
+        return GetClaimValue(ClaimTypes.Name);
     }
 
-    public async Task<string?> GetCurrentUserRole()
+    public Task<string?> GetCurrentUserRole()
     {
-        return await GetClaimValue(ClaimTypes.Role);
+        return GetClaimValue(ClaimTypes.Role);
     }
-    private async Task<string?> GetClaimValue(string claimType)
+
+    private Task<string?> GetClaimValue(string claimType)
     {
-        return httpContextAccessor.HttpContext?.User.FindFirst(claimType)?.Value;
+        string? value = httpContextAccessor.HttpContext?.User.FindFirst(claimType)?.Value;
+        return Task.FromResult(value);
     }
 }

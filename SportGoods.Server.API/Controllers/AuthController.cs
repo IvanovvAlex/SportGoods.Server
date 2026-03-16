@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SportGoods.Server.Common.Requests.Auth;
+using SportGoods.Server.Common.Requests.Users;
 using SportGoods.Server.Common.Responses.Auth;
+using SportGoods.Server.Common.Responses.Users;
 using SportGoods.Server.Core.StaticClasses;
 using SportGoods.Server.Domain.Interfaces;
 
@@ -9,13 +11,13 @@ namespace SportGoods.Server.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, IUserService userService) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<ActionResult<RegisterUserResponse>> Register(RegisterUserRequest request)
     {
         RegisterUserResponse? user = await authService.RegisterAsync(request);
-        
+
         return Ok(user);
     }
 
@@ -30,7 +32,21 @@ public class AuthController(IAuthService authService) : ControllerBase
 
         return Ok(result);
     }
-    
+
+    [HttpPost("forgot-password")]
+    public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword(ForgotPasswordRequest request)
+    {
+        ForgotPasswordResponse result = await authService.ForgotPasswordAsync(request);
+        return Ok(result);
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
+    {
+        bool result = await authService.ResetPasswordAsync(request);
+        return result ? Ok() : BadRequest();
+    }
+
     [Authorize]
     [HttpDelete("logout")]
     public async Task<ActionResult<TokenResponse>> Logout()
@@ -39,10 +55,10 @@ public class AuthController(IAuthService authService) : ControllerBase
         {
             return Unauthorized();
         }
-        
+
         return Ok();
     }
-    
+
     [HttpPost("refresh-token")]
     public async Task<ActionResult<TokenResponse>> RefreshToken(RefreshTokenRequest request)
     {
@@ -56,6 +72,22 @@ public class AuthController(IAuthService authService) : ControllerBase
     }
 
     [Authorize]
+    [HttpGet("me")]
+    public async Task<ActionResult<UserResponse>> GetCurrentUser()
+    {
+        UserResponse? user = await userService.GetCurrentUserAsync();
+        return Ok(user);
+    }
+
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<ActionResult<UserResponse>> UpdateCurrentUser(UpdateCurrentUserRequest request)
+    {
+        UserResponse? user = await userService.UpdateCurrentUserAsync(request);
+        return Ok(user);
+    }
+
+    [Authorize]
     [HttpGet]
     public IActionResult AuthenticatedOnlyEndpoint()
     {
@@ -66,6 +98,6 @@ public class AuthController(IAuthService authService) : ControllerBase
     [HttpGet("admin-only")]
     public IActionResult AdminOnlyEndpoint()
     {
-        return Ok("You are and admin!");
+        return Ok("You are an admin!");
     }
 }

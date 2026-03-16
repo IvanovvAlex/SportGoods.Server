@@ -1,4 +1,6 @@
 using Moq;
+using Microsoft.Extensions.Options;
+using SportGoods.Server.Common.Options;
 using SportGoods.Server.Common.Requests.Order;
 using SportGoods.Server.Common.Responses.Order;
 using SportGoods.Server.Core.Exceptions;
@@ -25,6 +27,8 @@ namespace SportGoods.Server.Tests.Unit.Services
         private readonly Mock<IProductRepository> productRepositoryMock;
         private readonly Mock<IAuthService> authServiceMock;
         private readonly Mock<IOrderItemRepository> orderItemRepositoryMock;
+        private readonly Mock<IUserRepository> userRepositoryMock;
+        private readonly Mock<IEmailNotificationService> emailNotificationServiceMock;
         private readonly OrderService orderService;
 
         public OrderServiceTests()
@@ -33,7 +37,16 @@ namespace SportGoods.Server.Tests.Unit.Services
             productRepositoryMock = new();
             authServiceMock = new();
             orderItemRepositoryMock = new();
-            orderService = new(orderRepositoryMock.Object, productRepositoryMock.Object, authServiceMock.Object, orderItemRepositoryMock.Object);
+            userRepositoryMock = new();
+            emailNotificationServiceMock = new();
+            orderService = new(
+                orderRepositoryMock.Object,
+                productRepositoryMock.Object,
+                authServiceMock.Object,
+                orderItemRepositoryMock.Object,
+                userRepositoryMock.Object,
+                emailNotificationServiceMock.Object,
+                Options.Create(new PaymentOptions()));
         }
 
         [Fact]

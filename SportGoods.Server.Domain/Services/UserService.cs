@@ -1,6 +1,4 @@
-using SportGoods.Server.Common.Requests.Auth;
 using SportGoods.Server.Common.Requests.Users;
-using SportGoods.Server.Common.Responses.Auth;
 using SportGoods.Server.Common.Responses.Users;
 using SportGoods.Server.Core.Exceptions;
 using SportGoods.Server.Core.StaticClasses;
@@ -10,22 +8,15 @@ using SportGoods.Server.Domain.Interfaces;
 
 namespace SportGoods.Server.Domain.Services;
 
-public class UserService(IUserRepository userRepository) : IUserService
+public class UserService(IUserRepository userRepository, IAuthService authService) : IUserService
 {
     public async Task<IEnumerable<UserResponse>?> GetAsync()
     {
         IEnumerable<User> users = await userRepository.GetAllAsync();
 
-        return users.Select(user => new UserResponse()
-        {
-            Id = user.Id,
-            Email = user.Email,
-            Names = user.Names,
-            Phone = user.Phone,
-            Role = user.Role,
-            
-        });
+        return users.Select(MapUser);
     }
+
     public async Task<UserResponse?> GetByIdAsync(Guid id)
     {
         User? user = await userRepository.GetByIdAsync(id);
@@ -33,38 +24,67 @@ public class UserService(IUserRepository userRepository) : IUserService
         {
             throw new AppException("User not found.").SetStatusCode(404);
         }
-        return new()
+
+        return MapUser(user);
+    }
+
+    public async Task<UserResponse?> GetCurrentUserAsync()
+    {
+        string? currentUserId = await authService.GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(currentUserId))
         {
-            Id = user.Id,
-            Email = user.Email,
-            Names = user.Names,
-            Phone = user.Phone,
-            Role = user.Role,
-        };    }
+            throw new AppException("Unauthorized").SetStatusCode(401);
+        }
+
+        return await GetByIdAsync(Guid.Parse(currentUserId));
+    }
+
+    public async Task<UserResponse?> UpdateCurrentUserAsync(UpdateCurrentUserRequest request)
+    {
+        string? currentUserId = await authService.GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            throw new AppException("Unauthorized").SetStatusCode(401);
+        }
+
+        UpdateUserRequest updateRequest = new()
+        {
+            Id = Guid.Parse(currentUserId),
+            Email = request.Email,
+            Names = request.Names,
+            Phone = request.Phone
+        };
+
+        return await UpdateAsync(updateRequest);
+    }
 
     public async Task<UserResponse?> UpdateAsync(UpdateUserRequest request)
     {
-        User userBeforeUpdate = (await userRepository.GetByIdAsync(request.Id))!;
+        User? userBeforeUpdate = await userRepository.GetByIdAsync(request.Id);
+        if (userBeforeUpdate == null)
+        {
+            throw new AppException("User not found.").SetStatusCode(404);
+        }
 
-        User? updatedUser = new()
+        User updatedUserPayload = new()
         {
             Id = request.Id,
             Email = request.Email,
             Names = request.Names,
             Phone = request.Phone,
             PasswordHash = userBeforeUpdate.PasswordHash,
+            Role = userBeforeUpdate.Role,
+            RefreshToken = userBeforeUpdate.RefreshToken,
+            RefreshTokenExpiryTime = userBeforeUpdate.RefreshTokenExpiryTime
         };
-        
-        updatedUser = await userRepository.UpdateAsync(updatedUser);
 
-        return new()
+        User? updatedUser = await userRepository.UpdateAsync(updatedUserPayload);
+        if (updatedUser == null)
         {
-            Id = updatedUser!.Id,
-            Email = updatedUser.Email,
-            Names = updatedUser.Names,
-            Phone = updatedUser.Phone,
-            Role = updatedUser.Role,
-        };    
+            throw new AppException("User not found.").SetStatusCode(404);
+        }
+
+        return MapUser(updatedUser);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -76,29 +96,29 @@ public class UserService(IUserRepository userRepository) : IUserService
             return false;
         }
 
-        return true;    
+        return true;
     }
 
-    public async Task<bool> PromoteToAdminAsync(RoleChangeRequest request)
+    public Task<bool> PromoteToAdminAsync(RoleChangeRequest request)
     {
-        return await ChangeRoleAsync(request, Roles.Admin);
+        return ChangeRoleAsync(request, Roles.Admin);
     }
 
-    public async Task<bool> DemoteToRegisteredCustomerAsync(RoleChangeRequest request)
+    public Task<bool> DemoteToRegisteredCustomerAsync(RoleChangeRequest request)
     {
-        return await ChangeRoleAsync(request, Roles.RegisteredCustomer);
+        return ChangeRoleAsync(request, Roles.RegisteredCustomer);
     }
 
     private async Task<bool> ChangeRoleAsync(RoleChangeRequest request, string toRole)
     {
-        User userBeforeUpdate = (await userRepository.GetByIdAsync(request.UserId))!;
+        User? userBeforeUpdate = await userRepository.GetByIdAsync(request.UserId);
 
         if (userBeforeUpdate == null)
         {
             throw new AppException("User not found.").SetStatusCode(404);
         }
-        
-        User? updatedUser = new()
+
+        User updatedUserPayload = new()
         {
             Id = request.UserId,
             Email = userBeforeUpdate.Email,
@@ -106,10 +126,23 @@ public class UserService(IUserRepository userRepository) : IUserService
             Phone = userBeforeUpdate.Phone,
             PasswordHash = userBeforeUpdate.PasswordHash,
             Role = toRole,
+            RefreshToken = userBeforeUpdate.RefreshToken,
+            RefreshTokenExpiryTime = userBeforeUpdate.RefreshTokenExpiryTime
         };
-        
-        updatedUser = await userRepository.UpdateAsync(updatedUser);
 
-        return true;  
+        User? updatedUser = await userRepository.UpdateAsync(updatedUserPayload);
+        return updatedUser != null;
+    }
+
+    private static UserResponse MapUser(User user)
+    {
+        return new UserResponse
+        {
+            Id = user.Id,
+            Email = user.Email,
+            Names = user.Names,
+            Phone = user.Phone,
+            Role = user.Role,
+        };
     }
 }
