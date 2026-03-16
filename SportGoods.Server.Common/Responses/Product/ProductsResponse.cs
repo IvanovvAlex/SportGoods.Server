@@ -1,4 +1,5 @@
 using SportGoods.Server.Common.Responses.Image;
+using SportGoods.Server.Core.StaticClasses;
 
 namespace SportGoods.Server.Common.Responses.Product;
 
@@ -13,6 +14,8 @@ public class ProductsResponse
     public required string MainImageUrl { get; set; }
 
     public decimal RegularPrice { get; set; }
+
+    public string CurrencyCode { get; set; } = CurrencyDefaults.Code;
     
     public byte DiscountPercentage { get; set; } 
     public decimal DiscountedPrice { get; set; }

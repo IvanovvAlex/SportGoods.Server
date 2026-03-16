@@ -31,6 +31,14 @@ namespace SportGoods.Server.Data
             builder.Entity<OrderItem>()
                 .Property(oi => oi.SinglePrice)
                 .HasPrecision(18, 2);
+
+            builder.Entity<OrderItem>()
+                .Property(oi => oi.TotalPrice)
+                .HasPrecision(18, 2);
+
+            builder.Entity<Order>()
+                .Property(o => o.OrderTotalPrice)
+                .HasPrecision(18, 2);
             
             builder.Entity<Image>()
                 .HasOne(i => i.Product)
