@@ -2,8 +2,13 @@
 
 **Project Name:** SportGoods  
 **System Type:** E-commerce system for sports goods  
-**Authors:** Alex Georgiev Ivanov  
-**Course / Subject:** Not explicitly specified in the repositories; complete manually if required by the course format  
+**Team and Roles:**  
+- Alex Ivanov — Team Lead and Backend Developer  
+- Kaloyan Iliev — Frontend Developer, UI/UX Designer, and Content Creator  
+**Year of Study:** 3rd year  
+**Semester:** Summer semester  
+**Specialty:** KST  
+**Group:** 25r  
 **Year:** 2026
 
 <div style="page-break-after: always;"></div>
