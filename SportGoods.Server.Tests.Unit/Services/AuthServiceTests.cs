@@ -1,19 +1,23 @@
 using System;
-using System.Linq.Dynamic.Core;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Moq;
 using SportGoods.Server.Common.Options;
 using SportGoods.Server.Common.Requests.Auth;
 using SportGoods.Server.Common.Responses.Auth;
 using SportGoods.Server.Core.Exceptions;
+using SportGoods.Server.Core.StaticClasses;
 using SportGoods.Server.Data;
 using SportGoods.Server.Data.Entities;
 using SportGoods.Server.Data.Interfaces;
+using SportGoods.Server.Domain.Authentication;
 using SportGoods.Server.Domain.Interfaces;
 using SportGoods.Server.Domain.Services;
 using Xunit;
@@ -24,6 +28,7 @@ public class AuthServiceTests
 {
     private readonly AuthService _authService;
     private readonly ApplicationDbContext _context;
+    private readonly JwtOptions _jwtOptions;
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private readonly Mock<IPasswordResetTokenStore> _passwordResetTokenStoreMock;
@@ -32,25 +37,26 @@ public class AuthServiceTests
     public AuthServiceTests()
     {
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: "TestDb")
+            .UseInMemoryDatabase(databaseName: $"TestDb-{Guid.NewGuid()}")
             .Options;
         _context = new(options);
         _userRepositoryMock = new();
         _httpContextAccessorMock = new();
         _passwordResetTokenStoreMock = new();
         _emailNotificationServiceMock = new();
+        _jwtOptions = new JwtOptions
+        {
+            Issuer = "SportGoods.Tests",
+            Audience = "SportGoods.Tests.Client",
+            Secret = "TestJwtSecretValueThatExceedsSixtyFourBytesForHs512SigningAndValidation123456789",
+            AccessTokenExpiryMinutes = 60,
+            RefreshTokenExpiryDays = 30
+        };
         _authService = new(
             _context,
             _userRepositoryMock.Object,
             _httpContextAccessorMock.Object,
-            Options.Create(new JwtOptions
-            {
-                Issuer = "SportGoods.Tests",
-                Audience = "SportGoods.Tests.Client",
-                Secret = "TestJwtSecretValueThatIsLongEnoughForJwtSigning123456",
-                AccessTokenExpiryMinutes = 60,
-                RefreshTokenExpiryDays = 30
-            }),
+            Options.Create(_jwtOptions),
             Options.Create(new ClientAppOptions
             {
                 BaseUrl = "http://localhost:5173"
@@ -104,6 +110,49 @@ public class AuthServiceTests
         TokenResponse? response = await _authService.LoginAsync(request);
 
         Assert.Null(response);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ShouldReturnTokenAcceptedByJwtValidation_WhenCredentialsAreValid()
+    {
+        User user = new()
+        {
+            Email = "customer@example.com",
+            Names = "Customer Example",
+            Phone = "123456789",
+            Role = Roles.RegisteredCustomer,
+            PasswordHash = "temporaryPasswordHash"
+        };
+
+        user.PasswordHash = new PasswordHasher<User>().HashPassword(user, "password123");
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        LoginUserRequest request = new()
+        {
+            Email = "customer@example.com",
+            Password = "password123"
+        };
+
+        TokenResponse? response = await _authService.LoginAsync(request);
+
+        Assert.NotNull(response);
+        Assert.False(string.IsNullOrWhiteSpace(response.AccessToken));
+        Assert.False(string.IsNullOrWhiteSpace(response.RefreshToken));
+
+        JwtSecurityTokenHandler tokenHandler = new();
+        TokenValidationParameters tokenValidationParameters = JwtSecurityConfiguration.CreateTokenValidationParameters(_jwtOptions);
+        ClaimsPrincipal claimsPrincipal = tokenHandler.ValidateToken(
+            response.AccessToken,
+            tokenValidationParameters,
+            out SecurityToken validatedToken);
+        JwtSecurityToken jwtSecurityToken = Assert.IsType<JwtSecurityToken>(validatedToken);
+
+        Assert.Equal(JwtSecurityConfiguration.SigningAlgorithm, jwtSecurityToken.Header.Alg);
+        Assert.Equal(user.Email, claimsPrincipal.FindFirst(ClaimTypes.Name)?.Value);
+        Assert.Equal(user.Id.ToString(), claimsPrincipal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        Assert.Equal(user.Role, claimsPrincipal.FindFirst(ClaimTypes.Role)?.Value);
     }
 
     [Fact]

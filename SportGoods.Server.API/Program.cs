@@ -1,8 +1,6 @@
-using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using SportGoods.Server.API.Configuration;
 using SportGoods.Server.API.Middlewares;
@@ -10,20 +8,25 @@ using SportGoods.Server.API.ServiceExtensions;
 using SportGoods.Server.Common.Options;
 using SportGoods.Server.Data;
 using SportGoods.Server.Data.Helpers;
+using SportGoods.Server.Domain.Authentication;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+    .ValidateOnStart();
 builder.Services.Configure<ClientAppOptions>(builder.Configuration.GetSection(ClientAppOptions.SectionName));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<PaymentOptions>(builder.Configuration.GetSection(PaymentOptions.SectionName));
 builder.Services.Configure<DevelopmentOptions>(builder.Configuration.GetSection(DevelopmentOptions.SectionName));
 builder.Services.Configure<InventoryOptions>(builder.Configuration.GetSection(InventoryOptions.SectionName));
+builder.Services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
 
 JwtOptions jwtOptions = builder.Configuration
     .GetSection(JwtOptions.SectionName)
     .Get<JwtOptions>() ?? throw new InvalidOperationException("JWT configuration is missing.");
+JwtSecurityConfiguration.ValidateOrThrow(jwtOptions);
 
 CorsOptions corsOptions = builder.Configuration
     .GetSection(CorsOptions.SectionName)
@@ -53,16 +56,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwtOptions.Issuer,
-            ValidateAudience = true,
-            ValidAudience = jwtOptions.Audience,
-            ValidateLifetime = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
-            ValidateIssuerSigningKey = true
-        };
+        options.TokenValidationParameters = JwtSecurityConfiguration.CreateTokenValidationParameters(jwtOptions);
     });
 
 builder.Services.AddAuthorization();

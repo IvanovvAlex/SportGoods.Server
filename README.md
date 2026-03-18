@@ -6,6 +6,8 @@ The API now uses `appsettings.json` and `appsettings.Development.json` for norma
 
 - Local database connection: `ConnectionStrings:DefaultConnection`
 - JWT settings: `Jwt`
+- `Jwt:Secret` must be longer than 64 bytes because the API signs access tokens with `HS512`
+- Render should not use `generateValue: true` for `Jwt__Secret`, because Render generates a random 256-bit value that is too short for `HS512`
 - frontend base URL: `ClientApp:BaseUrl`
 - CORS origins: `Cors:AllowedOrigins`
 - payment/email/local feature toggles: `Payments`, `Email`, `DevelopmentSettings`

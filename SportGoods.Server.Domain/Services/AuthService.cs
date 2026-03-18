@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +14,7 @@ using SportGoods.Server.Core.StaticClasses;
 using SportGoods.Server.Data;
 using SportGoods.Server.Data.Entities;
 using SportGoods.Server.Data.Interfaces;
+using SportGoods.Server.Domain.Authentication;
 using SportGoods.Server.Domain.Interfaces;
 
 namespace SportGoods.Server.Domain.Services;
@@ -211,9 +211,7 @@ public class AuthService(
             new Claim(ClaimTypes.Role, user.Role ?? Roles.RegisteredCustomer)
         ];
 
-        SymmetricSecurityKey key = new(Encoding.UTF8.GetBytes(_jwtOptions.Secret));
-
-        SigningCredentials creds = new(key, SecurityAlgorithms.HmacSha512);
+        SigningCredentials creds = JwtSecurityConfiguration.CreateSigningCredentials(_jwtOptions);
 
         JwtSecurityToken tokenDescriptor = new(
             issuer: _jwtOptions.Issuer,

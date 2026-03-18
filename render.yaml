@@ -32,7 +32,7 @@ services:
       - key: Jwt__Audience
         value: SportGoods.Server.API.Client
       - key: Jwt__Secret
-        generateValue: true
+        sync: false
       - key: Jwt__AccessTokenExpiryMinutes
         value: "120"
       - key: Jwt__RefreshTokenExpiryDays
