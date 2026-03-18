@@ -25,6 +25,7 @@ public class JwtSecurityConfigurationTests
 
         Assert.Contains("Jwt:Secret", exception.Message);
         Assert.Contains("longer than 64 bytes", exception.Message);
+        Assert.Contains("openssl rand -base64 64", exception.Message);
         Assert.Contains(JwtSecurityConfiguration.SigningAlgorithm, exception.Message);
     }
 

@@ -3,13 +3,14 @@ using System.Net;
 using SportGoods.Server.Core.Exceptions;
 public class ExceptionHandlerMiddleware
 {
-    private static readonly string _internalServerError = "InternalServerError";
     private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionHandlerMiddleware> _logger;
     private readonly string _responseContentType = "application/json";
 
     public ExceptionHandlerMiddleware(RequestDelegate next, ILogger<ExceptionHandlerMiddleware> logger)
     {
         _next = next;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -20,6 +21,7 @@ public class ExceptionHandlerMiddleware
         }
         catch (AppException e)
         {
+            _logger.LogWarning(e, "Application exception handled with status code {StatusCode}.", e.StatusCode);
             context.Response.StatusCode = e.StatusCode;
             context.Response.ContentType = _responseContentType;
 
@@ -39,6 +41,7 @@ public class ExceptionHandlerMiddleware
         }
         catch (Exception e)
         {
+            _logger.LogError(e, "Unhandled exception reached exception middleware.");
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = _responseContentType;
 

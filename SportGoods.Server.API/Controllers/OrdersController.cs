@@ -39,7 +39,10 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [HttpGet("get-list")]
     public async Task<IActionResult> SearchOrdersAsync([FromQuery] SearchOrderRequest? request)
     {
-        return await ControllerProcessor.ProcessAsync(() => orderService.SearchOrdersAsync(request), this, true);
+        return await ControllerProcessor.ProcessAsync(
+            () => orderService.SearchOrdersAsync(request ?? new SearchOrderRequest()),
+            this,
+            true);
     }
     
     [HttpPut("change-status")]

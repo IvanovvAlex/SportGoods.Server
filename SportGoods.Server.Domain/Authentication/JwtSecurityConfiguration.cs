@@ -52,7 +52,7 @@ public static class JwtSecurityConfiguration
             if (secretBytes.Length <= HmacSha512MinimumSecretLengthInBytes)
             {
                 validationErrors.Add(
-                    $"The 'Jwt:Secret' value must be longer than {HmacSha512MinimumSecretLengthInBytes} bytes (more than {HmacSha512MinimumSecretLengthInBytes * 8} bits) for {SigningAlgorithm}. Current size: {secretBytes.Length} bytes ({secretBytes.Length * 8} bits).");
+                    $"The 'Jwt:Secret' value must be longer than {HmacSha512MinimumSecretLengthInBytes} bytes (more than {HmacSha512MinimumSecretLengthInBytes * 8} bits) for {SigningAlgorithm}. Current size: {secretBytes.Length} bytes ({secretBytes.Length * 8} bits). Generate a valid secret with 'openssl rand -base64 64' and set it as 'Jwt__Secret' in your host configuration.");
             }
         }
 

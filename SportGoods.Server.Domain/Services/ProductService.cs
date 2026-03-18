@@ -29,7 +29,7 @@ public class ProductService(IProductRepository productRepository, ICategoryRepos
             Rating = product.Rating,
             Quantity = product.Quantity,
             CategoryId = product.CategoryId,
-            CategoryName = product.Category?.Name,
+            CategoryName = product.Category?.Name ?? string.Empty,
             SecondaryImages = product.SecondaryImages
                 .Select(img => new ImageResponse
                 {
@@ -56,7 +56,7 @@ public class ProductService(IProductRepository productRepository, ICategoryRepos
             Rating = product.Rating,
             Quantity = product.Quantity,
             CategoryId = product.CategoryId,
-            CategoryName = product.Category?.Name,
+            CategoryName = product.Category?.Name ?? string.Empty,
             SecondaryImages = product.SecondaryImages
                 .Select(img => new ImageResponse
                 {
@@ -86,7 +86,7 @@ public class ProductService(IProductRepository productRepository, ICategoryRepos
             Rating = product.Rating,
             Quantity = product.Quantity,
             CategoryId = product.CategoryId,
-            CategoryName = product.Category?.Name,
+            CategoryName = product.Category?.Name ?? string.Empty,
             SecondaryImages = product.SecondaryImages
                 .Select(img => new ImageResponse
                 {
@@ -133,7 +133,8 @@ public class ProductService(IProductRepository productRepository, ICategoryRepos
             product.DiscountPercentage = (byte)((1 - product.DiscountedPrice / product.RegularPrice) * 100m);
         }
         
-        product = await productRepository.AddAsync(product);
+        product = await productRepository.AddAsync(product)
+            ?? throw new InvalidOperationException("Failed to persist product.");
 
         List<Image> images = new();
 
@@ -228,7 +229,8 @@ public class ProductService(IProductRepository productRepository, ICategoryRepos
         await imageRepository.AddAsync(newImage);
     }
 
-    Product updatedProduct = await productRepository.UpdateAsync(existingProduct);
+    Product updatedProduct = await productRepository.UpdateAsync(existingProduct)
+        ?? throw new InvalidOperationException("Failed to persist product updates.");
 
     return new()
     {
@@ -307,7 +309,7 @@ public class ProductService(IProductRepository productRepository, ICategoryRepos
                 Quantity = product.Quantity,
                 Rating = product.Rating,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name,
+                CategoryName = product.Category?.Name ?? string.Empty,
                 SecondaryImages = product.SecondaryImages
                     .Select(si => new ImageResponse
                     {
