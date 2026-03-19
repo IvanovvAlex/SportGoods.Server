@@ -1,10 +1,10 @@
 # Title Page
 
 **Project Name:** SportGoods  
-**System Type:** E-commerce system for sports goods  
+**System Type:** Web-based e-commerce system for sports goods  
 **Team and Roles:**  
-- Alex Ivanov — Team Lead and Backend Developer  
-- Kaloyan Iliev — Frontend Developer, UI/UX Designer, and Content Creator  
+- Alex Ivanov, Team Lead and Backend Developer  
+- Kaloyan Iliev, Frontend Developer, UI/UX Designer, and Content Creator  
 **Year of Study:** 3rd year  
 **Semester:** Summer semester  
 **Specialty:** KST  
@@ -15,177 +15,230 @@
 
 ## 1. Project Overview
 
-SportGoods is an integrated web-based system for selling sports goods online. The platform combines a public product catalog, authenticated customer functions, checkout and order processing, and an administrative workspace for managing catalog data and users. The current implementation is split into two repositories: `SportGoods.Client`, which contains the single-page frontend application, and `SportGoods.Server`, which contains the REST API, domain logic, persistence layer, and automated backend tests.
+SportGoods is a university software project that implements a complete online store for sports goods. The goal of the system is not only to display products, but to support the full operational cycle of a modern e-commerce platform: public catalog browsing, customer registration and login, cart handling, checkout, order tracking, product reviews, wishlist management, and administrator-side catalog and order management. The implementation is intentionally split into two repositories. `SportGoods.Client` contains the single-page frontend application, while `SportGoods.Server` contains the REST API, domain services, persistence layer, configuration, and backend tests.
 
-The business problem addressed by the system is the need for a structured online channel through which sports equipment can be presented, searched, filtered, ordered, and administrated. In a traditional physical store or an unstructured catalog, customers have limited ability to compare products, review stock availability, retain selected products, and finalize an order asynchronously. SportGoods solves this by organizing products into categories, exposing detailed product pages, allowing authenticated ordering, and providing a role-based administration area for operational control.
+The business problem addressed by the project is the need for a structured digital sales channel for sports equipment and accessories. In a traditional physical store or a simple static website, customers often cannot compare products efficiently, filter a large catalog, check stock availability, save products for later, or place orders outside working hours. SportGoods resolves these limitations by providing category navigation, detailed product pages, authenticated customer actions, and an administrative workspace for store operations.
 
-The system serves two main user groups. The first group is end customers who browse the store, register, log in, manage personal data, add items to a cart, place orders, maintain a wishlist, and submit product reviews. The second group is administrators who maintain products, categories, users, and orders through dedicated protected screens and API endpoints. The presence of both groups is visible throughout the codebase in the use of JWT-based authentication, role checks for administrative actions, and separate frontend routes for the admin dashboard.
+The implemented system serves three practical user contexts. The first context is the public storefront, where visitors can open the home page, browse categories, inspect featured products, search and filter the catalog, and read detailed product information. The second context is the authenticated customer area, where registered users can maintain their profile, add items to an active cart, place an order, review past orders, save products in a wishlist, submit reviews, export their personal data, and request account deletion. The third context is the administrative workspace, where an administrator can monitor order activity, inspect low-stock products, manage products and categories, maintain user accounts, and change order statuses during processing.
 
-The main capabilities of the platform are consistent with the expected scope of an online sports store. The public area provides a home page, category browsing, product listing with filtering and pagination, and product detail pages with images and reviews. The authenticated area adds profile management, privacy-related export and deletion actions, cart handling, checkout, order history, and wishlist management. The administrative area extends the system with CRUD operations for products, categories, and users, as well as order monitoring and status changes.
+From a functional perspective, the project implements the main processes that are expected from a medium-complexity online store. Products belong to categories, support discounts and secondary images, and can be filtered by title, category, price range, and minimum rating. Registered users can authenticate with JWT-based access control, recover forgotten passwords, manage profile data, and move through the order flow from draft cart to completed order. Orders are not treated as an isolated checkout form; they are a central aggregate that models both the active cart state and the post-checkout business process. This design gives the system a coherent domain model that is suitable for academic analysis.
 
-In functional terms, SportGoods covers catalog presentation, customer identity management, order capture, status tracking, review management, and operational administration. The checkout flow also includes payment-method and delivery-method selection. It is important to note that the current codebase models payment as a configurable application flow rather than a live payment gateway integration. Likewise, email notifications are currently prepared through a console-based notification service rather than a production SMTP or third-party mail provider. These decisions are appropriate for a university project because they preserve the business process without introducing unnecessary external dependencies.
+An important part of the project is that it remains realistic without pretending to implement infrastructure that does not exist. Payment selection is modeled through configurable application options and exposed in the checkout flow, but the project does not claim a live banking or card processor integration. Likewise, order confirmations and password reset messages are handled through a console-based notification service instead of a real SMTP or third-party email provider. This is an appropriate engineering decision for a university project because it preserves the application workflow without adding external operational dependencies that are unrelated to the academic goals.
 
-From a system scope perspective, the project focuses on the core workflow of a medium-complexity e-commerce application. The backend persists users, categories, products, images, reviews, orders, order items, and wishlist entries in PostgreSQL. The frontend exposes these capabilities through a React single-page application. The resulting system is sufficiently broad for academic analysis because it includes user authentication, role-based authorization, layered architecture, relational data modeling, validation, state management, and deployment preparation with Docker artifacts.
+The current codebase also includes a ready-to-demo data set. The seed logic populates the database with 8 categories, 14 products, 11 users including one administrator, 12 sample orders across multiple statuses, 18 reviews, and 6 wishlist entries. This is valuable for project defense because the application can be demonstrated with realistic data rather than empty screens or placeholder-only flows.
+
+From an academic standpoint, SportGoods is a strong study object because it combines user authentication, role-based authorization, relational data modeling, layered backend architecture, a modern SPA frontend, database migrations, automated backend testing, and containerized deployment artifacts. The project is large enough to show real software architecture decisions, but still compact enough to explain clearly during a defense.
 
 ## 2. System Architecture
 
-The architecture of SportGoods follows a clear client-server model with layered backend responsibilities. The frontend is implemented as a React and TypeScript single-page application built with Vite. The backend is implemented as an ASP.NET Core Web API that exposes REST endpoints. Persistence is handled by Entity Framework Core over a PostgreSQL database. Supporting components include JWT authentication, an in-memory password reset token store, a console-based notification service, and OpenAPI documentation through Scalar.
+SportGoods follows a client-server architecture with a clearly layered backend and a component-based frontend. The browser loads a React application, the React application communicates with an ASP.NET Core REST API over HTTP and JSON, the API delegates business behavior to domain services, and the persistence layer stores state in PostgreSQL through Entity Framework Core. This separation is visible in the repository structure, the project layout inside the server solution, and the runtime configuration loaded during application startup.
 
-### 2.1 Frontend Application
+### 2.1 Repository Structure and Responsibilities
 
-`SportGoods.Client` is responsible for rendering all customer-facing and administrator-facing screens. Routing is implemented with React Router, while selected state is stored with Redux Toolkit and browser `localStorage`. The client contains pages for home, products, product details, cart, checkout, order history, wishlist, profile, login, registration, password recovery, and a dedicated admin dashboard. Styling is handled primarily through Tailwind CSS, with custom typography and color tokens defined in the project theme. Feedback to users is given through `react-toastify`, and rich-text display/editing is supported with `react-quill`.
+The two repositories have complementary responsibilities.
 
-The frontend communicates directly with the REST API by issuing `fetch` requests to the base address defined through `VITE_API_URL`. There is no separate client-side service layer abstraction at the moment; instead, page components call the backend endpoints directly. This design keeps the project easy to follow for academic purposes, although in a larger commercial system some of the request logic would typically be centralized.
+- `SportGoods.Client` contains the visual storefront and back-office interface.
+- `SportGoods.Server` contains the API, domain rules, entity model, repositories, and unit tests.
 
-### 2.2 Backend API
+The backend repository is additionally split into multiple .NET projects. `SportGoods.Server.API` contains controllers, middleware, startup logic, and infrastructure services. `SportGoods.Server.Domain` contains business services such as `AuthService`, `ProductService`, `OrderService`, `ReviewService`, `WishlistService`, `UserService`, and `GdprService`. `SportGoods.Server.Data` contains the `ApplicationDbContext`, entity classes, repositories, filtering helpers, migrations, and seeders. `SportGoods.Server.Common` contains request and response DTOs and strongly typed option classes. `SportGoods.Server.Core` contains enums, shared static values, paging helpers, and exception types. This structure demonstrates a deliberate layered design rather than a controller-heavy monolith.
 
-`SportGoods.Server` is organized into API, Domain, Data, Core, and Common projects. The API project defines controllers, middleware, service registration, and application startup. The Domain project contains business services such as `AuthService`, `ProductService`, `OrderService`, `ReviewService`, `WishlistService`, `UserService`, and `GdprService`. The Data project contains Entity Framework entities, repositories, pagination/filtering utilities, seeding logic, and the application database context. The Core project contains shared enums, paging helpers, roles, and exception types. The Common project contains request and response DTOs as well as configuration option classes.
+### 2.2 Frontend Application
 
-This separation is important academically because it demonstrates a layered architecture rather than a monolithic controller-driven implementation. Controllers stay thin and delegate work to domain services. Domain services coordinate validation, repository calls, stock handling, role-sensitive behavior, and response mapping. Repositories encapsulate persistence logic and use Entity Framework Core for relational access. The result is a structure that is maintainable, testable, and easy to explain in a project defense.
+The frontend is implemented with React 18, TypeScript, and Vite. Routing is defined in `App.tsx` with `react-router-dom`, and the page structure separates public pages, authenticated customer pages, and administrator pages. The currently implemented public pages include `Home`, `Products`, `ProductDetails`, `About`, `Login`, `Register`, `ForgotPassword`, and `ResetPassword`. Authenticated customer pages include `Cart`, `Checkout`, `CheckoutConfirmation`, `Orders`, `Wishlist`, and `Profile`. Administrative functionality is grouped under `AdminPanel` and includes `AdminOverview`, `Products`, `Categories`, `Users`, and `AdminOrders`.
 
-### 2.3 Database and Persistence
+Styling is handled mainly through Tailwind CSS, with a consistent visual language across the storefront and the admin workspace. Notifications are shown through `react-toastify`, and rich product descriptions are edited and rendered with `react-quill`. Shared client state is managed with Redux Toolkit slices for authentication, cart information, and user-related data. Authentication state is persisted in `localStorage`, which allows the application to restore the current user session after a page refresh. At the same time, the frontend keeps the implementation approachable by relying mostly on page-level state for filters, tables, forms, and loading states.
 
-The system uses PostgreSQL as the active database engine. This is confirmed by the Npgsql provider, the `UseNpgsql` call in `Program.cs`, and the Docker Compose configuration for a PostgreSQL 16 container. Entity Framework Core is used for migrations, database initialization, seeding, and runtime queries. The generic repository layer also implements soft deletion through the shared `IsDeleted` field that exists in `GenericEntity`.
+The frontend communicates with the backend through `fetch` requests to the base URL defined by `VITE_API_URL`. There is no separate API client abstraction layer yet; the pages call the endpoints directly. For the current project size this is a reasonable tradeoff. It keeps the data flow transparent for educational purposes and makes it easier to trace how individual pages depend on specific backend endpoints.
 
-An important modeling detail is that the project does not define a separate cart table. Instead, the active shopping cart is represented by an `Order` entity whose status is `Created`. During checkout, the same order is enriched with delivery details and moved to `PendingVerification`, after which the administrative order lifecycle can continue through `Verified`, `Processing`, `Shipped`, `Delivered`, or `Cancelled`. This is a compact and academically interesting design because it reuses one aggregate for both pre-checkout and post-checkout states.
+### 2.3 Backend API and Layered Services
 
-### 2.4 Communication Between Layers
+The backend is implemented with ASP.NET Core Web API and targets `net10.0` in the current project files. Controllers expose REST endpoints under `/api`, but they remain deliberately thin. Their primary responsibility is request binding, authorization declaration, and delegating work to the appropriate service. Examples include `AuthController`, `ProductsController`, `OrdersController`, `ReviewsController`, `WishlistController`, `CategoriesController`, `UsersController`, and `GdprController`.
 
-Communication from browser to frontend is standard SPA interaction. Communication from frontend to backend happens through HTTPS requests carrying JSON payloads. Protected requests add a `Bearer` access token in the `Authorization` header. On the server side, ASP.NET Core validates the JWT, dispatches the request to the appropriate controller, and the controller delegates to the domain service. Services use repositories and Entity Framework Core to query or update the database, then return DTOs that are serialized back to the frontend.
+The real business logic is concentrated in the domain services. `AuthService` handles registration, login, refresh tokens, logout, and password reset. `OrderService` owns cart manipulation, checkout finalization, order searching, status changes, price calculation, and stock reduction. `ProductService` handles CRUD operations, secondary images, product search, and best-seller retrieval. `ReviewService` manages review creation, update, deletion, and rating recalculation. `WishlistService` manages the saved product list for each customer. `GdprService` exports and anonymizes personal data. `UserService` handles profile updates and administrative user management. This distribution of responsibilities makes the codebase easier to test and defend because the core workflows are not hidden inside controllers.
 
-The authentication subsystem adds refresh tokens persisted on the user record, password hashing through `PasswordHasher<User>`, and a password reset flow that uses `IMemoryCache` to hold time-limited tokens. The exception middleware converts domain and runtime errors into JSON responses, which keeps the API contract predictable for the client application.
+Repositories encapsulate persistence concerns. The project contains repositories for users, categories, products, images, reviews, orders, order items, and wishlist items. These repositories operate on Entity Framework Core entities and are injected into the domain services through interfaces. The result is a classic service-plus-repository architecture that is appropriate for a teaching project focused on layered design and responsibility separation.
 
-### 2.5 Deployment Components
+### 2.4 Data Persistence and Runtime Configuration
 
-The client repository contains a Dockerfile that builds the Vite application and serves the generated static files with Nginx. The server repository contains a Dockerfile for publishing the ASP.NET Core API and a Docker Compose file that starts both the API and PostgreSQL. Environment templates are present in both repositories. This indicates that the project is prepared for containerized deployment and reproducible local setup, even though no separate CI/CD workflow definition was detected in the workspace.
+PostgreSQL is the actual runtime database engine. This is confirmed by the `UseNpgsql` registration in `Program.cs`, the Npgsql package references, and the backend `docker-compose.yml` file that starts a PostgreSQL 16 container. Entity Framework Core is used for database access, migrations, decimal precision configuration, relationship mapping, and data seeding. During startup the API resolves its connection string, applies migrations automatically, and then executes the database seeders.
+
+Runtime behavior is controlled through strongly typed options. The backend binds sections for JWT, client URL, CORS, email behavior, payments, development settings, and inventory thresholds. This configuration is then consumed by services such as `AuthService`, `OrderService`, and the console notification service. Practical examples include the list of supported payment methods, the password reset token lifetime, the low-stock threshold used in the admin dashboard, and the optional development behavior for exposing password reset preview links.
+
+### 2.5 Communication and Request Lifecycle
+
+The dominant request lifecycle in the application is straightforward and easy to explain. A user performs an action in the browser, the React page sends an HTTP request with JSON data, the API authenticates and authorizes the request if needed, the controller passes the request to a domain service, the service performs validation and persistence operations through repositories, and a DTO response is returned to the frontend. Protected requests carry a `Bearer` token in the `Authorization` header. On the server side, `JwtBearer` authentication validates the token, and `[Authorize]` or `[Authorize(Roles = Roles.Admin)]` guards sensitive operations.
+
+Error handling is centralized through a custom exception middleware. This is important for frontend integration because the client receives consistent JSON-style failure responses instead of raw framework exceptions. The API also exposes OpenAPI metadata and a Scalar API reference page, which improves inspectability during development and project defense.
 
 ### 2.6 High-Level Architecture Diagram
 
 ```mermaid
 flowchart LR
-    User["End user or administrator"] --> Browser["Web browser"]
+    User["Visitor, customer, or administrator"] --> Browser["Web browser"]
 
-    subgraph ClientLayer["Client layer"]
-        Client["SportGoods.Client<br/>React + TypeScript + Vite SPA"]
+    subgraph Client["Client layer"]
+        SPA["SportGoods.Client<br/>React + TypeScript + Vite SPA"]
+        Redux["Redux Toolkit + local component state"]
     end
 
-    subgraph ServerLayer["Server layer"]
-        Api["SportGoods.Server.API<br/>ASP.NET Core REST API"]
-        Services["Domain services<br/>Auth, Catalog, Orders, Reviews, Wishlist, GDPR"]
-        Repo["Repository layer<br/>Entity Framework Core"]
-        Cache["IMemoryCache<br/>Password reset token store"]
-        Email["Console email notification service"]
-        Docs["OpenAPI / Scalar reference"]
+    subgraph Server["Server layer"]
+        API["SportGoods.Server.API<br/>ASP.NET Core REST API"]
+        Domain["Domain services<br/>Auth, Product, Order, Review, Wishlist, User, GDPR"]
+        Repos["Repository layer<br/>Entity Framework Core"]
+        Middleware["Exception middleware"]
+        Cache["IMemoryCache<br/>password reset token store"]
+        Notify["Console email notification service"]
+        Docs["OpenAPI + Scalar"]
     end
 
-    subgraph DataLayer["Data layer"]
-        Db["PostgreSQL database"]
+    subgraph Data["Persistence and deployment"]
+        DB["PostgreSQL"]
+        Docker["Docker / Docker Compose"]
+        Nginx["Nginx for built frontend"]
     end
 
-    Browser --> Client
-    Client -->|"HTTPS + JSON + JWT"| Api
-    Api --> Services
-    Services --> Repo
-    Repo --> Db
-    Api --> Cache
-    Api --> Email
-    Api --> Docs
+    Browser --> SPA
+    SPA --> Redux
+    SPA -->|"HTTP + JSON + JWT"| API
+    API --> Middleware
+    API --> Domain
+    Domain --> Repos
+    Repos --> DB
+    API --> Cache
+    Domain --> Notify
+    API --> Docs
+    SPA --> Nginx
+    API --> Docker
+    DB --> Docker
 ```
 
-The diagram shows the real core structure of the current implementation. The frontend does not access the database directly. All business behavior passes through the API and domain services, while persistence is delegated to repositories and Entity Framework Core.
+The architecture diagram reflects the actual implementation boundaries. The frontend never accesses the database directly. Business behavior is owned by the backend, while deployment preparation is represented through the Docker and Nginx artifacts included in the repositories.
 
-## 3. UML Diagrams
+## 3. Functional Modules and UML Diagrams
 
-The following diagrams summarize the most important user interactions implemented in the project. Because Mermaid does not provide a full native UML use case notation, the use case view is represented as a structured flowchart while preserving the meaning of actors and system functions.
+The system can be understood as a collection of cooperating modules rather than a loose set of pages. The public catalog module covers discovery and product presentation. The customer module covers authentication, cart handling, checkout, order tracking, wishlist management, review management, and profile maintenance. The administrative module covers store operations such as managing the product catalog, categories, users, and order state. A fourth cross-cutting module handles security, configuration, privacy-related export and anonymization, and operational support functions such as notifications and seed data.
 
 ### 3.1 Use Case Diagram
 
 ```mermaid
 flowchart LR
-    Customer["Customer"]:::actor
+    Visitor["Visitor"]:::actor
+    Customer["Registered customer"]:::actor
     Admin["Administrator"]:::actor
 
     subgraph SportGoods["SportGoods system"]
-        UC1(["Register"])
-        UC2(["Login"])
-        UC3(["Browse products"])
-        UC4(["View product details"])
-        UC5(["Add to cart"])
-        UC6(["Checkout"])
-        UC7(["Manage own orders"])
-        UC8(["Manage wishlist and reviews"])
-        UC9(["Manage products"])
-        UC10(["Manage categories"])
-        UC11(["Manage users"])
-        UC12(["Manage order statuses"])
+        UC1(["Browse catalog"])
+        UC2(["View product details"])
+        UC3(["Register and log in"])
+        UC4(["Recover password"])
+        UC5(["Manage cart"])
+        UC6(["Place order"])
+        UC7(["Track and cancel own orders"])
+        UC8(["Manage wishlist"])
+        UC9(["Create, edit, and delete reviews"])
+        UC10(["Edit profile"])
+        UC11(["Export or delete account data"])
+        UC12(["Manage products and categories"])
+        UC13(["Manage users"])
+        UC14(["Monitor and update orders"])
+        UC15(["Review low-stock indicators"])
     end
+
+    Visitor --- UC1
+    Visitor --- UC2
+    Visitor --- UC3
+    Visitor --- UC4
 
     Customer --- UC1
     Customer --- UC2
-    Customer --- UC3
-    Customer --- UC4
     Customer --- UC5
     Customer --- UC6
     Customer --- UC7
     Customer --- UC8
+    Customer --- UC9
+    Customer --- UC10
+    Customer --- UC11
 
-    Admin --- UC2
-    Admin --- UC9
-    Admin --- UC10
-    Admin --- UC11
     Admin --- UC12
+    Admin --- UC13
+    Admin --- UC14
+    Admin --- UC15
 
     classDef actor fill:#f8fafc,stroke:#0f172a,stroke-width:1px,color:#0f172a;
 ```
 
-The diagram reflects the separation between customer and administrator behavior. Customers use the storefront and personal account functions, while administrators work with protected management endpoints and dashboard screens. Authentication is common to both roles, but authorization differentiates the allowed operations.
+The use case view shows that the system is not limited to basic browsing and checkout. It also includes account lifecycle functions, privacy-related actions, and operational administration. This breadth is one of the reasons the project is suitable for academic defense.
 
-### 3.2 Sequence Diagram
+### 3.2 Sequence Diagram for Checkout
 
 ```mermaid
 sequenceDiagram
-    actor User
+    actor Customer
     participant Client as SportGoods.Client
-    participant API as SportGoods.Server.API
+    participant API as OrdersController
     participant Service as OrderService
-    participant Repo as Repositories + EF Core
+    participant ProductRepo as ProductRepository
+    participant OrderRepo as OrderRepository
     participant DB as PostgreSQL
     participant Notify as ConsoleEmailNotificationService
 
-    User->>Client: Submit checkout form
-    Client->>API: POST /api/Orders (JWT + delivery data)
+    Customer->>Client: Fill checkout form and confirm consent
+    Client->>API: POST /api/Orders
     API->>Service: SendCurrentAsync(request)
-    Service->>Repo: Load active cart order
-    Repo->>DB: Read order and items
-    DB-->>Repo: Current order
-    Repo-->>Service: Active cart
-    Service->>Repo: Load products and verify stock
-    Repo->>DB: Read product quantities
-    DB-->>Repo: Product data
-    Service->>Repo: Update order status and delivery fields
-    Repo->>DB: Save order changes
-    Service->>Repo: Decrease stock quantities
-    Repo->>DB: Update products
+    Service->>OrderRepo: Load current Created order for user
+    OrderRepo->>DB: Read order and order items
+    DB-->>OrderRepo: Current cart order
+    OrderRepo-->>Service: Current cart order
+    Service->>ProductRepo: Verify stock for every item
+    ProductRepo->>DB: Read product quantities
+    DB-->>ProductRepo: Product data
+    ProductRepo-->>Service: Stock snapshot
+    Service->>Service: Resolve payment and delivery method
+    Service->>OrderRepo: Update delivery fields and status
+    OrderRepo->>DB: Persist order changes
+    Service->>ProductRepo: Decrease product quantities
+    ProductRepo->>DB: Persist product updates
     Service->>Notify: SendOrderConfirmationAsync(...)
     Notify-->>Service: Confirmation logged
-    Service-->>API: Success
+    Service-->>API: true
     API-->>Client: 200 OK
-    Client-->>User: Order confirmation screen
+    Client-->>Customer: Navigate to confirmation page
 ```
 
-This sequence diagram captures a typical successful purchase scenario. The real implementation checks consent, validates stock availability, updates the order status, decreases inventory, and finally triggers the configured notification service. The flow therefore covers presentation, business logic, persistence, and auxiliary services in one continuous transaction chain.
+This diagram reflects the actual checkout flow in the code. The order is loaded from the existing `Created` draft, stock is verified before the order is finalized, quantities are reduced only after validation, and the notification service is triggered last.
+
+### 3.3 Order Status State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Created
+    Created: Active cart
+    Created --> PendingVerification: Checkout completed
+    PendingVerification --> Verified: Admin confirms
+    Verified --> Processing: Fulfilment begins
+    Processing --> Shipped: Handed to courier
+    Shipped --> Delivered: Customer receives order
+    Created --> Cancelled: Customer or admin cancels
+    PendingVerification --> Cancelled: Order rejected or cancelled
+    Verified --> Cancelled: Administrative cancellation
+    Processing --> Cancelled: Administrative cancellation
+    Delivered --> [*]
+    Cancelled --> [*]
+```
+
+The state model is especially important because SportGoods intentionally reuses one `Order` aggregate both as the cart and as the final order. The `Created` state represents the draft cart, and all later states represent operational order processing.
 
 ## 4. Database Design
 
-The database model is centered on a compact but expressive set of entities that cover catalog management, shopping behavior, ordering, and customer-generated content. The system defines `User`, `Category`, `Product`, `Image`, `Order`, `OrderItem`, `Review`, and `WishlistItem`. All of these inherit from `GenericEntity`, which contributes `Id`, `CreatedOn`, `ModifiedOn`, and `IsDeleted`. This shared base is important because it standardizes identity, auditing, and soft deletion across the data model.
+The database model is intentionally compact, but it covers the complete business behavior needed by the project. The main entities are `User`, `Category`, `Product`, `Image`, `Order`, `OrderItem`, `Review`, and `WishlistItem`. All of them inherit from `GenericEntity`, which contributes a generated identifier, creation and modification timestamps, and a soft-delete flag. This shared base makes the model more consistent and supports recovery-friendly deletion behavior.
 
-`Category` groups products and stores a name and image URI. `Product` is the core catalog entity and contains title, description, main image, prices, discount data, quantity, rating, and a foreign key to its category. Additional visual media are stored in `Image`, which references a product and enables galleries on the product details page. `Review` links a user to a product and stores textual content and rating, which are later aggregated to update the product rating.
+`Category` represents a top-level catalog grouping and stores a name and image URI. `Product` is the central catalog entity and stores title, description, main image URL, regular price, discount percentage, discounted price, rating, quantity, and a foreign key to `Category`. Product galleries are handled through the separate `Image` entity, which points back to a product and allows multiple secondary images per item.
 
-Customer purchasing activity is modeled through `Order` and `OrderItem`. `Order` contains both ownership information and delivery data such as names, postal code, country, city, address, and phone. `OrderItem` stores product snapshots needed for completed ordering flows, including quantity, unit price, total price, title, and image URI. This approach reduces dependency on future product edits because an order item still retains the transactional information needed for later display.
+`User` stores the email, password hash, full name, phone number, role, refresh token, and refresh token expiry. The project does not use ASP.NET Identity tables in the full standard form; instead, it relies on the custom `User` entity together with `PasswordHasher<User>`. This makes the identity model easier to explain in an academic context while still demonstrating secure password hashing and token-based authentication.
 
-The project also implements `WishlistItem`, which creates a many-to-many style association between users and products for saved items. Unlike orders, wishlist entries do not persist a full product snapshot because they are intended as lightweight references to current catalog items. The GDPR export service also shows that wishlist and review data are considered part of the user's personal data footprint.
+The order model is more interesting than a standard two-table checkout form. `Order` stores both ownership data and delivery information such as names, postal code, country, city, address, phone number, total price, and status. `OrderItem` stores a product reference together with a snapshot of transactional data: quantity, single price, total price, product title, and primary image URI. The snapshot design is important because it preserves the order display information even if the product catalog changes later.
 
-One of the most important conceptual decisions in the model is the reuse of `Order` as both cart and finalized order. While the status is `Created`, the order represents the current cart. When checkout is completed, the same record becomes a formal order and advances through operational statuses. This eliminates the need for a separate cart entity and simplifies the transition from browsing to ordering without losing relational consistency.
+`Review` links a user to a product and stores written feedback plus a rating. `WishlistItem` links users and products in a lightweight many-to-many style table. Together with the GDPR export functionality, these entities show that the project considers user-generated content and personal data as part of the domain model, not as afterthoughts.
 
 ### 4.1 E-R Diagram
 
@@ -194,11 +247,11 @@ erDiagram
     USER ||--o{ ORDER : places
     USER ||--o{ REVIEW : writes
     USER ||--o{ WISHLIST_ITEM : saves
-    CATEGORY ||--o{ PRODUCT : contains
+    CATEGORY ||--o{ PRODUCT : groups
     PRODUCT ||--o{ IMAGE : has
     PRODUCT ||--o{ REVIEW : receives
     PRODUCT ||--o{ ORDER_ITEM : appears_in
-    PRODUCT ||--o{ WISHLIST_ITEM : referenced_by
+    PRODUCT ||--o{ WISHLIST_ITEM : is_saved_as
     ORDER ||--|{ ORDER_ITEM : contains
 
     USER {
@@ -210,12 +263,14 @@ erDiagram
         string Role
         string RefreshToken
         datetime RefreshTokenExpiryTime
+        bool IsDeleted
     }
 
     CATEGORY {
         guid Id
         string Name
         string ImageUri
+        bool IsDeleted
     }
 
     PRODUCT {
@@ -229,12 +284,14 @@ erDiagram
         uint Quantity
         double Rating
         guid CategoryId
+        bool IsDeleted
     }
 
     IMAGE {
         guid Id
         string Uri
         guid ProductId
+        bool IsDeleted
     }
 
     ORDER {
@@ -248,6 +305,7 @@ erDiagram
         string Phone
         decimal OrderTotalPrice
         int Status
+        bool IsDeleted
     }
 
     ORDER_ITEM {
@@ -259,6 +317,7 @@ erDiagram
         decimal TotalPrice
         string Title
         string PrimaryImageUri
+        bool IsDeleted
     }
 
     REVIEW {
@@ -267,88 +326,139 @@ erDiagram
         guid ProductId
         string Content
         byte Rating
+        bool IsDeleted
     }
 
     WISHLIST_ITEM {
         guid Id
         guid UserId
         guid ProductId
+        bool IsDeleted
     }
 ```
 
-The diagram corresponds to the actual backend entities and intentionally does not introduce non-existent tables such as `Cart` or `Address`. In SportGoods, cart behavior is handled by `Order`, and delivery address fields are embedded directly in the order record.
+### 4.2 Data Modeling Decisions
+
+Several data-model decisions deserve explicit explanation because they are central to the design quality of the project.
+
+- The project does not define a separate `Cart` table. An `Order` in `Created` status acts as the active cart.
+- Soft deletion is applied across the model through the shared `IsDeleted` flag, which supports safer administrative deletion and GDPR-friendly anonymization.
+- `OrderItem` stores a product snapshot instead of only foreign keys and calculated values at runtime. This preserves historical consistency.
+- Secondary product images are normalized into a separate table instead of being embedded in one text field.
+- PostgreSQL numeric values are configured explicitly for price precision in `ApplicationDbContext`.
+
+These decisions make the model easier to evolve and stronger from an academic software engineering perspective.
 
 ## 5. Development Stages
 
-Based on the current repositories and their separation of concerns, the project can be reconstructed as passing through several recognizable development stages. This section describes the stages in a way suitable for academic documentation, without claiming a minute-by-minute historical timeline.
+The exact historical commit-by-commit chronology is not the purpose of this document. However, the current repository structure and implementation clearly show a realistic development progression that can be reconstructed and defended.
 
-### 5.1 Requirements Analysis
+### 5.1 Planning and Scope Definition
 
-The initial stage was the identification of the core processes expected from an online sports goods store: product catalog browsing, user registration and login, product details, cart creation, order placement, administrative management, and basic privacy compliance. The structure of the completed system shows that these requirements were not treated as isolated pages but as connected workflows. For example, the presence of wishlist, reviews, password reset, and GDPR export/deletion indicates that the analysis went beyond a minimal shop prototype and included customer account lifecycle concerns.
+The first stage was the selection of a domain that is familiar, demonstrable, and rich enough for layered implementation. Sports goods e-commerce is suitable because it includes catalog management, user accounts, transactional flows, and administrator operations. At this stage the team needed to decide what belonged inside the project scope and what would stay outside it. The implemented result shows a deliberate choice to cover the complete internal store workflow while leaving out external integrations such as production payment gateways and live email delivery.
 
-### 5.2 System Design
+### 5.2 Requirements Analysis
 
-The next stage was the transformation of business requirements into a software design. This is visible in the explicit separation between frontend and backend repositories, the domain-driven naming of services, the request/response DTO layer, and the relational data model. The UI code also shows that the visual prototype was later refined into a more polished SPA while keeping the original system idea intact. Several client texts explicitly refer to preserving the core layout and user flow from the earlier prototype/presentation stage.
+The requirements stage focused on identifying the essential user journeys. For customers these journeys were browsing, product inspection, registration, login, password recovery, cart handling, checkout, order history, wishlist behavior, reviews, and profile maintenance. For administrators they were product, category, user, and order management. A second category of requirements concerned security and compliance, including password hashing, JWT-based access control, consent during checkout, personal data export, and account anonymization. The current codebase demonstrates that these concerns were treated as system requirements from the beginning and not added at the last moment.
 
-### 5.3 Architecture Definition
+### 5.3 UI, Data, and Architecture Design
 
-During the architecture stage, the project adopted a layered backend and a component-based frontend. The backend was divided into API, Domain, Data, Core, and Common projects, which is a strong educational choice because each layer has a distinct role. On the frontend, routing, page composition, reusable layout components, and isolated admin pages were defined. State concerns were split between Redux Toolkit for persistent/auth-related client state and per-page local state for view-specific data such as filters, tables, and forms.
+Once the requirements were defined, they were translated into a software structure. This is visible in the two-repository setup, the multi-project backend solution, the entity relationships, and the page structure of the frontend. The team designed separate layers for controllers, services, repositories, DTOs, and entities. On the frontend, the pages were organized into public, customer, and administrator routes. The data model was designed around categories, products, images, users, reviews, orders, and wishlist entries, with `Order` intentionally reused as the cart aggregate.
 
 ### 5.4 Implementation
 
-Implementation proceeded across both repositories. On the server side, developers created entities, repositories, services, controllers, startup configuration, and seeding logic. Authentication was implemented with JWT and refresh tokens, password hashing, and a password reset flow. Catalog and order services were enriched with business rules for stock validation, order status transitions, and role-sensitive access. On the client side, the team implemented the public catalog, customer account pages, checkout flow, and administrator dashboard. The admin area evolved into a multi-section management shell for overview metrics, users, categories, products, and orders.
+Implementation took place in parallel across both repositories. On the server side, the team created entities, repositories, controllers, services, configuration classes, middleware, migrations, and seeders. On the client side, the team implemented the storefront, the product listing and detail pages, the cart and checkout flow, customer account screens, and the administrative workspace. Evidence of gradual refinement can be seen in the range of implemented features: not just CRUD operations, but also rating recalculation, low-stock warnings, password reset preview links, seeded sample orders, and GDPR data export.
 
-The codebase also shows that implementation included realistic operational additions rather than only CRUD mechanics. Examples include review rating recalculation, low-stock visualization in the admin dashboard, GDPR export and anonymization, category and product imagery, password reset preview links for development, and environment-driven payment configuration.
+### 5.5 Testing and Correction
 
-### 5.5 Testing
+Testing is strongest on the backend. The solution contains a dedicated unit test project with xUnit, Moq, and the EF Core InMemory provider. The current repository contains 113 backend tests that cover configuration validation, repositories, and service behavior for authentication, categories, products, reviews, orders, users, and wishlist handling. This indicates that testing was treated as a real engineering activity rather than a symbolic final step. On the frontend side, the project includes Vitest and Testing Library configuration, but no project-specific frontend tests were found in `src`. This should be acknowledged honestly during defense as an area for further improvement.
 
-The server repository contains a dedicated unit test project using xUnit, Moq, and the Entity Framework in-memory provider. Tests exist for major services and repositories such as authentication, categories, products, orders, reviews, users, and wishlist behavior. This confirms that testing was considered part of the backend development lifecycle. In contrast, the client repository includes Vitest and Testing Library dependencies and a `test` script, but no project-specific frontend tests were detected in `src`. Therefore, the current testing maturity is stronger on the backend than on the frontend.
+### 5.6 Deployment Preparation and Documentation
 
-### 5.6 Deployment Preparation
-
-The final stage visible in the repositories is deployment preparation. Both repositories contain Docker artifacts and environment templates. The server can be started together with PostgreSQL through Docker Compose, while the client can be built into static assets and served through Nginx. This stage also includes operational configuration in `appsettings.json`, such as JWT settings, CORS origins, payment options, email behavior, low-stock thresholds, and development toggles. Even without a detected CI/CD pipeline, the project demonstrates readiness for reproducible local execution and container-based publishing.
+The final stage visible in the repositories is preparation for reproducible execution and submission. Both repositories contain Docker artifacts. The backend can run together with PostgreSQL through Docker Compose, and the frontend can be built and served through Nginx. The API applies migrations on startup and seeds the database automatically, which reduces manual setup steps before demonstration. The present documentation and defense materials belong to this stage as well, because academic completion requires not only code, but also a structured explanation of the architecture, technologies, workflows, and limitations.
 
 ## 6. Technologies Used
 
-### 6.1 Backend Technologies
+### 6.1 Backend Technologies and Rationale
 
-The backend is implemented with .NET and ASP.NET Core Web API, targeting `net10.0` in the current project files. HTTP endpoints are exposed through controller classes, while OpenAPI and Scalar provide interactive API reference output. Authentication uses `Microsoft.AspNetCore.Authentication.JwtBearer`, and password storage relies on `PasswordHasher<User>`. Authorization is role-based, with explicit checks for administrator-only actions on users, products, and categories.
+The backend is built with .NET and ASP.NET Core Web API. This stack was chosen because it offers a mature framework for REST APIs, dependency injection, authentication, middleware, and configuration binding. For a university project it is especially appropriate because it supports clean separation between controllers, services, and repositories while also being widely used in enterprise software.
 
-Persistence is implemented with Entity Framework Core. Although some project references include SQL Server-related EF packages, the active runtime configuration clearly uses the Npgsql provider and PostgreSQL as the actual database backend. The application uses migrations, repositories, filtering models, dynamic sorting, and seeding routines. Additional backend support technologies include in-memory caching for password reset tokens and custom exception middleware for JSON error handling.
+Entity Framework Core is used as the persistence technology. It provides database migrations, LINQ-based querying, relationship mapping, and seed initialization. In this project it reduces boilerplate and allows the team to focus on business rules rather than low-level SQL plumbing. PostgreSQL is the selected database engine. It fits the project well because it is stable, open-source, and well supported through Npgsql. The choice is justified not only technically, but also educationally, since it exposes students to a real relational database workflow.
 
-### 6.2 Frontend Technologies
+Authentication is implemented through `Microsoft.AspNetCore.Authentication.JwtBearer`, refresh tokens, and `PasswordHasher<User>`. This combination allows the project to demonstrate secure password storage and stateless API protection. Scalar and OpenAPI are used for inspectable API documentation. `IMemoryCache` is used for temporary password reset tokens, and the project also includes custom middleware for centralized exception handling.
 
-The client is built with React 18, TypeScript, and Vite. Navigation is handled with React Router, and shared client state is managed with Redux Toolkit. Tailwind CSS is used for styling, supported by PostCSS and Autoprefixer. The interface also uses Heroicons for iconography, React Toastify for status messages, and React Quill where rich-text editing or display is needed. API communication is performed with the browser `fetch` API, and the base URL is provided through Vite environment variables.
+### 6.2 Frontend Technologies and Rationale
 
-From an implementation standpoint, the frontend combines global state and local component state. Authentication, cart data, and wishlist identifiers are stored in Redux and partly persisted in `localStorage`, while data grids, filter controls, and form state are managed inside page components. This hybrid approach is common in medium-sized SPA projects and is appropriate for the current system scale.
+The frontend uses React 18 with TypeScript and Vite. React is appropriate for the project because the application has many reusable UI elements, multiple views, and client-side state transitions. TypeScript adds stronger type safety for API responses, component props, and state models. Vite provides a fast local development loop and a straightforward production build pipeline, which is especially useful in a student project that is iterated on frequently.
 
-### 6.3 Docker, Tooling, and Development Support
+Routing is handled by `react-router-dom`, which fits the SPA model and supports clear separation between public and protected pages. Redux Toolkit is used for shared state such as authentication, cart information, and user-related data. Tailwind CSS is used for styling because it makes it possible to build a complete responsive UI without a large custom CSS codebase. `react-toastify` provides visible feedback for operations such as adding products to the cart or handling failures. `react-quill` is used where rich product descriptions are edited or rendered. Together, these technologies create a modern but still understandable frontend stack.
 
-The project includes Dockerfiles for both repositories and a Docker Compose file for the backend plus database. Backend tests are written with xUnit, Moq, and EF Core InMemory. Frontend quality tooling includes ESLint, TypeScript type checking, and Vitest configuration. The repositories also include environment templates, README files, and seed data for demonstration purposes. No CI/CD workflow definition was detected outside dependency folders, so deployment automation appears to be outside the current repository scope.
+### 6.3 Database, Deployment, and Environment Management
 
-## 7. Implementation Highlights
+PostgreSQL is the active database, while Docker and Docker Compose are used to make the project easier to run locally and more reproducible for defense. The backend Docker Compose setup defines both the API and the database, while the frontend has its own Dockerfile and a lightweight Docker Compose configuration for serving the built application. Nginx is used to serve the production frontend bundle. Environment values are separated into `.env.example` files and `appsettings` sections, which is a good practice even in an academic setting because it avoids hard-coding environment-dependent configuration directly in the source.
 
-The authentication subsystem is one of the most complete parts of the project. Registration creates customer accounts with hashed passwords and a default customer role. Login returns access and refresh tokens together with identity data used by the client. Refresh tokens are stored on the user entity, logout clears them, and protected profile endpoints allow the current user to retrieve and update personal details. The password recovery flow is also fully represented: the backend generates a temporary token, stores it in memory, and exposes a reset link preview in console-based development mode.
+### 6.4 Development and Quality Tools
 
-The product catalog is implemented as a full browsing workflow rather than a static listing. Categories are stored separately and fetched by the client to build filters and homepage navigation. Product search supports title, category, price range, minimum rating, sorting, and pagination. Product detail pages display the main image, secondary images, stock level, rich description, and customer reviews. Reviews are not decorative only; the backend recalculates the aggregate product rating after review creation or update.
+Backend quality support includes xUnit, Moq, and EF Core InMemory for unit testing. Frontend quality support includes ESLint, TypeScript type checking, and Vitest configuration. Git is used for version control, and the project structure suggests team-based collaboration with clear repository responsibilities. These tools were chosen not as decoration, but because they support maintainability, correctness, and predictable project delivery.
 
-Cart and checkout behavior are modeled around the order aggregate. When a user adds products, the client sends requests to the order endpoints and the backend either creates or updates the active `Created` order. The cart page then reads the current order from the server and lets the user change quantities or remove items. At checkout, the customer provides delivery information, chooses between configured payment and delivery methods, and confirms consent for personal data processing. The server validates stock, writes delivery data into the order, transitions its status, decreases inventory, and logs an order confirmation message through the notification service.
+## 7. Quality, Security, and Readiness for Demonstration
 
-Order management is implemented for both customer and administrator views. Customers can browse their own order history with sorting and pagination and can request cancellation. Administrators can retrieve the global order list, inspect current state, and move orders through the defined lifecycle statuses. The dashboard overview additionally calculates total revenue, recent orders, and low-stock warnings, which makes the administration area more analytical and closer to a real operational workspace.
+### 7.1 Authentication and Authorization
 
-Administrative functionality also covers product, category, and user management. Products can be created and updated with descriptions, pricing, discounts, stock quantity, category assignment, and secondary images. Categories store both names and image URIs. Users can be created, edited, deleted, and promoted or demoted between customer and admin roles. These operations are protected through role-based authorization on the server and guarded routes on the client.
+The system implements multiple layers of access control. Passwords are hashed, JWT access tokens secure protected endpoints, refresh tokens allow session renewal, and role-based authorization restricts administrative operations. On the frontend, customer-only pages are protected through `PrivateRoute`, and the admin workspace checks the current user role before rendering. On the backend, administrator endpoints are explicitly guarded with role constraints. This combination is important because it shows that the project does not rely solely on client-side hiding of buttons or routes.
 
-Another notable implementation highlight is the privacy functionality. The GDPR service can export the current user's profile, orders, wishlist references, and reviews as structured data. Account deletion is implemented as anonymization plus soft deletion rather than unsafe physical removal. This is a sound design for an academic e-commerce project because it preserves historical order integrity while reducing stored personal data.
+### 7.2 Validation, Exception Handling, and Data Safety
 
-Finally, frontend-backend communication is explicit and easy to trace. The client sends JSON requests to REST endpoints under `/api`, usually with JWT authorization headers for protected operations. The backend maps requests to DTOs, processes them in domain services, and returns typed response objects. This interaction pattern is simple, well aligned with the chosen technologies, and suitable for future extension.
+Request DTOs define the input contract for operations such as checkout, status changes, and product management. Business services perform additional checks, for example verifying stock before confirming an order, preventing duplicate wishlist entries, and recalculating ratings after review changes. A custom exception middleware converts service-level failures into predictable API responses. Account deletion is handled as anonymization plus soft deletion, which preserves order history while reducing personal data retention. This is a defensible design choice for an e-commerce domain.
 
-## 8. Screenshots of the Finished System
+### 7.3 Testing Status
 
-The following placeholders are intentionally reserved for manual insertion of real screenshots from the running application. To remain within the assignment limit, the final exported document should keep this section within a maximum of two pages.
+The backend test suite currently contains 113 automated tests distributed across configuration, repositories, and services. This gives the project measurable engineering depth beyond UI screenshots and manual clicking. The tests are especially valuable around authentication, repository behavior, and order logic, where regressions would affect the most critical workflows. The honest limitation is that the frontend currently has configured test tooling but not implemented project-specific automated tests. This does not invalidate the project, but it should be presented as the next quality improvement step rather than hidden.
 
-1. `[Insert Screenshot 1: Home page with hero section, categories, and featured products]`
-2. `[Insert Screenshot 2: Product catalog with filters, pagination, and product cards]`
-3. `[Insert Screenshot 3: Product details page with gallery, stock information, and reviews]`
-4. `[Insert Screenshot 4: Cart and checkout flow]`
-5. `[Insert Screenshot 5: Profile page with GDPR export / delete actions and order history]`
-6. `[Insert Screenshot 6: Administrator dashboard with overview metrics and management screens]`
+### 7.4 Demonstration Readiness
+
+The project is well prepared for a defense demonstration. The API applies migrations automatically, the seeders populate realistic catalog and order data, the admin dashboard shows meaningful metrics, and the public storefront is visually complete enough for live navigation. The data set includes low-stock cases, different order statuses, multiple categories, customer reviews, and privacy-related functionality. This allows the team to demonstrate both happy-path use cases and system depth within a short presentation slot.
+
+## 8. Screenshots of the Finished Solution
+
+To stay within the academic limit of approximately two pages, this document should contain no more than four final figures. The recommended approach is a 2x2 layout with concise captions. If more interface states must be shown, combine related views into a single collage figure instead of adding more pages.
+
+1. `[Figure 1 placeholder: Home page with hero section, category entry points, and featured products]`
+2. `[Figure 2 placeholder: Product catalog with filters, pagination, and product cards]`
+3. `[Figure 3 placeholder: Product details page or checkout flow showing cart-to-order transition]`
+4. `[Figure 4 placeholder: Admin workspace with overview metrics, low-stock section, and order management]`
+
+If space permits, the profile and GDPR actions can be shown inside Figure 3 or Figure 4 as a combined collage rather than as a separate fifth screenshot.
+
+## 9. Presentation and Defense Structure
+
+The project should be defended through a short, technical, and logically ordered presentation. A practical ten-slide structure is recommended.
+
+1. **Slide 1, Title and team:** Introduce the project, the team members, and the two-repository structure. State that SportGoods is an online store for sports goods with customer and admin functionality.
+2. **Slide 2, Problem and motivation:** Explain why a structured online sales channel is needed and what limitations exist in a non-digital or weakly structured store process.
+3. **Slide 3, Target users and implemented scope:** Present the three user contexts: visitor, registered customer, and administrator. Summarize the implemented modules.
+4. **Slide 4, System architecture:** Show the client-server diagram and explain the split between React frontend, ASP.NET Core API, domain services, repositories, and PostgreSQL.
+5. **Slide 5, Database model:** Show the E-R diagram and explain the core entities. Highlight the design decision that an `Order` in `Created` status acts as the active cart.
+6. **Slide 6, Main workflow:** Use the sequence or state diagram to explain the checkout and order lifecycle from cart creation to delivery or cancellation.
+7. **Slide 7, Technologies and rationale:** Explain why React, TypeScript, ASP.NET Core, EF Core, PostgreSQL, Docker, and automated tests were chosen.
+8. **Slide 8, Live demo:** Demonstrate one complete flow such as home page to product details to cart to checkout confirmation, then switch to the admin dashboard and show order status management.
+9. **Slide 9, Quality, security, and limitations:** Mention JWT authentication, role checks, backend tests, GDPR export and anonymization, and also state the current limitations honestly.
+10. **Slide 10, Conclusion:** Summarize what was achieved, why the architecture is appropriate, and what the next engineering steps would be.
+
+For extended slide-by-slide speaker notes, see the dedicated file `docs/DefensePresentation.en.md`.
+
+## 10. Current Limitations and Future Development
+
+The project is complete enough for academic submission, but it is not presented as a finished commercial product. Several limitations are visible in the real implementation and should be stated clearly.
+
+- Payment is modeled as a configurable application flow, not as a live external gateway integration.
+- Email delivery is implemented through a console service, not through SMTP or a cloud mail provider.
+- Frontend automated tests are not yet implemented, even though the toolchain is prepared.
+- The repositories do not currently include a CI/CD workflow definition.
+- Product and category images are referenced by URI rather than uploaded into dedicated file storage.
+
+These limitations also define the most realistic next steps for future development. The first improvement would be to add frontend tests for the critical pages and flows. The second would be to integrate a real email provider and a production payment service. The third would be to add CI/CD automation and environment-specific deployment profiles. A fourth improvement would be centralized frontend API utilities and token refresh handling to reduce repeated fetch logic across pages.
+
+## 11. Conclusion
+
+SportGoods satisfies the requirements of a substantial academic software project. It provides a realistic domain, a layered architecture, a relational database model, protected customer and admin functionality, automated backend testing, and deployment preparation through Docker. Just as importantly, it does not overstate what is implemented. The documentation reflects the real structure of the codebase and can be defended as an honest engineering description of the current system.
